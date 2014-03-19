@@ -1,0 +1,51 @@
+
+18d1:db00 - lpcboot / m3boot
+----------------------------
+- provides a pair of USB bulk endpoints, IN and OUT
+- write a three word (32b-LE) command sequence ( MAGIC, CMD, ARG)
+  - MAGIC is 0xDB00A5A5
+  - see below for CMD
+  - ARG should be zero if not specified
+- read a two word (32b-LE) response ( MAGIC, STATUS)
+  - MAGIC is 0xDB00A5A5
+  - nonzero STATUS is failure
+- read or write payload, as required
+
+- commands
+  - write to flash: CMD='W', ARG=size
+  - write to RAM (and execute): CMD='X', ARG=size
+  - erase flash: CMD='E'
+  - reboot: CMD='R'
+  - start code in flash: CMD='A'
+  - query device info: CMD='Q'
+
+struct device_info {
+        char part[16];		/* "LPC1343", "STM32F103", etc */
+        char board[16];		/* "M3DEBUG", "TESTBOARD123", etc */
+        uint32_t version;	/* protocol version: 0x0001000 -> V1.0 */
+        uint32_t ram_base;	/* start of SRAM */
+        uint32_t ram_size;	/* length of SRAM (minus 1K bootloader workspace) */
+        uint32_t rom_base;	/* start of FLASH (after 4K bootloader) */
+        uint32_t rom_size;	/* length of FLASH (minus 4K bootloader)
+        uint32_t ununsed0;	
+        uint32_t ununsed1;
+        uint32_t ununsed2;
+};
+
+
+18d1:db03 - remote swdp
+-----------------------
+- provides a pair of USB bulk endpoints, IN and OUT
+- see include/protocol/rswdp.h for details
+
+18d1:db05 - usb console
+-----------------------
+- provides a pair of USB bulk endpoints, IN and OUT
+- console output (device to host) provided via BULK IN
+- console input (host to device) provided via BULK OUT (format TBD)
+
+18d1:db04 - remote swdp + console
+---------------------------------
+- interface 0 provides remote swdp
+- interface 1 provides usb console
+

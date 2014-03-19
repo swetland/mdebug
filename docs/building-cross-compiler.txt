@@ -1,0 +1,64 @@
+
+New Instructions
+----------------
+
+Use http://github.com/travisg/toolchains
+
+1. % git clone https://github.com/travisg/toolchains.git
+2. % cd toolchains
+3. % ARCHES=arm ./doit
+4. wait while it downloads and builds the toolchain
+5. arrange for toolchains/arm-eabi-4.8.2-Linux-x86_64/bin to be in your
+   path or use local.mk to override the TOOLCHAIN build variable
+
+
+
+Old Instructions
+----------------
+
+This is a transcript of how I built the toolchain, not really intended 
+to be run as a script.
+
+TODO: see if it's smaller/faster/etc to build only for cortex-m3
+
+Inspired by http://www.hermann-uwe.de/blog/building-an-arm-cross-toolchain-with-binutils-gcc-newlib-and-gdb-from-source and the gcc online manuals.
+
+
+# install packages needed on ubuntu
+sudo apt-get install libgmp3-dev libmpc-dev libgmp3-dev zlib1g-dev build-essential libncurses5-dev texinfo
+
+# setup workspace
+mkdir /work/tools
+cd /work/tools
+
+# grab sources
+wget http://mirrors.kernel.org/gnu/binutils/binutils-2.22.tar.bz2
+wget http://mirrors.kernel.org/gnu/gcc/gcc-4.6.2/gcc-4.6.2.tar.bz2
+wget http://mirrors.kernel.org/gnu/gdb/gdb-7.3.1.tar.bz2
+tar -xjvf binutils-2.22.tar.bz2
+tar -xjvf gcc-4.6.2.tar.bz2
+tar -xjvf gdb-7.3.1.tar.bz2
+
+mkdir build 
+
+cd build
+../binutils-2.22/configure --target=arm-none-eabi --prefix=/work/tools/arm --enable-interwork --enable-multilib --with-gnu-as --with-gnu-ld --disable-nls
+make
+make install
+cd ..
+rm -rf build/*
+
+cd build
+../gcc-4.6.2/configure --target=arm-none-eabi --prefix=/work/tools/arm --enable-interwork --enable-multilib --enable-languages="c" --disable-nls --disable-shared --disable-threads --without-headers --with-gnu-as --with-gnu-ld  --with-system-zlib --disable-libssp --disable-libmudflap --disable-libgomp
+make
+make install
+cd ..
+rm -rf build/*
+
+cd build
+../gdb-7.3.1/configure --target=arm-none-eabi --prefix=/work/tools/arm --enable-interwork --enable-multilib
+make
+make install
+cd ..
+rm -rf build/*
+

@@ -1,0 +1,185 @@
+
+http://infocenter.arm.com/help/topic/com.arm.doc.genc007826/Barrier_Litmus_Tests_and_Cookbook_A08.pdf
+
+-----
+
+http://infocenter.arm.com/help/index.jsp?topic=/com.arm.doc.faqs/ka14041.html
+states:
+
+It is architecturally defined that software must perform a Data Memory 
+Barrier (DMB) operation:
+- between acquiring a resource, for example, through locking a mutex 
+  (MUTual EXclusion) or decrementing a semaphore, and making any access 
+  to that resource
+- before making a resource available, for example, through unlocking a 
+  mutex or incrementing a semaphore.
+
+-----
+
+To generate a scheduling barrier:
+   asm volatile ("" : : : "memory");
+
+To generate a hardware memory barrier:
+   __sync_synchronize();
+
+   This appears to issue a "dmb sy" on cortex-m3 in arm-eabi-none
+
+
+Based on these excerpts from a gcc-help thread.  References:
+http://gcc.gnu.org/ml/gcc-help/2011-04/msg00166.html
+http://gcc.gnu.org/ml/gcc-help/2011-04/msg00168.html
+http://gcc.gnu.org/ml/gcc-help/2011-04/msg00180.html
+
+From: Ian Lance Taylor <iant at google dot com>
+Date: Mon, 11 Apr 2011 14:42:07 -0700
+Subject: Re: full memory barrier?
+
+Hei Chan <structurechart at yahoo dot com> writes:
+
+> I am a little bit confused what asm volatile ("" : : : "memory") does.
+>
+> I searched online; many people said that it creates the "full memory barrier".
+>
+> I have a test code:
+> int main() {
+>         bool bar;
+>         asm volatile ("" : : : "memory");
+>         bar = true;
+>         return 1;
+> }
+>
+> Running g++ -c -g -Wa,-a,-ad foo.cpp gives me:
+>
+>    2:foo.cpp       ****         bool bar;
+>    3:foo.cpp       ****         asm volatile ("" : : : "memory");
+>   22                            .loc 1 3 0
+>    4:foo.cpp       ****         bar = true;
+>   23                            .loc 1 4 0
+>
+> It doesn't involve any fence instruction.
+>
+> Maybe I completely misunderstand the idea of "full memory barrier".
+
+The definition of "memory barrier" is ambiguous when looking at code
+written in a high-level language.
+
+The statement "asm volatile ("" : : : "memory");" is a compiler
+scheduling barrier for all expressions that load from or store values to
+memory.  That means something like a pointer dereference, an array
+index, or an access to a volatile variable.  It may or may not include a
+reference to a local variable, as a local variable need not be in
+memory.
+
+This kind of compiler scheduling barrier can be used in conjunction with
+a hardware memory barrier.  The compiler doesn't know that a hardware
+memory barrier is special, and it will happily move memory access
+instructions across the hardware barrier.  Therefore, if you want to use
+a hardware memory barrier in compiled code, you must use it along with a
+compiler scheduling barrier.
+
+On the other hand a compiler scheduling barrier can be useful even
+without a hardware memory barrier.  For example, in a coroutine based
+system with multiple light-weight threads running on a single processor,
+you need a compiler scheduling barrier, but you do not need a hardware
+memory barrier.
+
+gcc will generate a hardware memory barrier if you use the
+__sync_synchronize builtin function.  That function acts as both a
+hardware memory barrier and a compiler scheduling barrier.
+
+Ian
+
+-----
+
+From: Ian Lance Taylor <iant at google dot com>
+Date: Mon, 11 Apr 2011 15:20:27 -0700
+Subject: Re: full memory barrier?
+
+Hei Chan <structurechart at yahoo dot com> writes:
+
+> You mentioned the statement "is a compiler scheduling barrier for all 
+> expressions that load from or store values to memory".  Does "memory" mean the 
+> main memory?  Or does it include the CPU cache?
+
+I tried to explain what I meant by way of example.  It means pointer
+reference, array reference, volatile variable access.  Also I should
+have added global variable access.  In general it means memory from the
+point of view of the compiler.  The compiler doesn't know anything about
+the CPU cache.  When thinking about a "compiler scheduling barrier," you
+have to think about the world that the compiler sees, which is quite
+different from, though obviously related to, the world that the hardware
+sees.
+
+Ian
+
+-----
+
+From: Ian Lance Taylor <iant at google dot com>
+Date: Tue, 12 Apr 2011 15:36:58 -0700
+Subject: Re: full memory barrier?
+
+David Brown <david at westcontrol dot com> writes:
+
+> On 11/04/2011 23:42, Ian Lance Taylor wrote:
+>>
+>> The definition of "memory barrier" is ambiguous when looking at code
+>> written in a high-level language.
+>>
+>> The statement "asm volatile ("" : : : "memory");" is a compiler
+>> scheduling barrier for all expressions that load from or store values to
+>> memory.  That means something like a pointer dereference, an array
+>> index, or an access to a volatile variable.  It may or may not include a
+>> reference to a local variable, as a local variable need not be in
+>> memory.
+>>
+>
+> Is there any precise specifications for what counts as "memory" here?
+> As gcc gets steadily smarter, it gets harder to be sure that
+> order-specific code really is correctly ordered, while letting the
+> compiler do it's magic on the rest of the code.
+
+I'm not aware of a precise specification.  It would be something like
+the list I made above, to which I would add global variables.  But
+you're right, as the compiler gets smarter, it is increasingly able to
+lift things out of memory.  I suppose that in the extreme case, it's
+possible that only volatile variables count.
+
+
+> For example, if you have code like this:
+>
+> static int x;
+> void test(void) {
+> 	x = 1;
+> 	asm volatile ("" : : : "memory");
+> 	x = 2;
+> }
+>
+> The variable "x" is not volatile - can the compiler remove the
+> assignment "x = 1"?  Perhaps with aggressive optimisation, the
+> compiler will figure out how and when x is used, and discover that it
+> doesn't need to store it in memory at all, but can keep it in a
+> register (perhaps all uses have ended up inlined inside the same
+> function).  Then "x" is no longer in memory - will it still be
+> affected by the memory clobber?
+
+If the compiler manages to lift x into a register, then it will not be
+affected by the memory clobber, and, yes, the compiler would most likely
+remove the assignment "x = 1".
+
+
+> Also, is there any way to specify a more limited clobber than just
+> "memory", so that the compiler has as much freedom as possible?
+> Typical examples are to specify "clobbers" for just certain variables,
+> leaving others unaffected, or to distinguish between reads and writes.
+> For example, you might want to say "all writes should be completed by
+> this point, but data read into registers will stay valid".
+>
+> Some of this can be done with volatile accesses in different ways, but
+> not always optimally, and not always clearly.
+
+You can clobber certain variables by listing them in the output of the
+asm statement.  There is no way to distinguish between reads and writes.
+
+Ian
+
+

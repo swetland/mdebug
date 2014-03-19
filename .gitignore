@@ -1,0 +1,8 @@
+.*
+*~
+out
+bin
+local.mk
+tags
+TAGS
+cscope.out

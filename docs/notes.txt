@@ -1,0 +1,50 @@
+Cortex M3
+---------
+- All M3 vectors are interwork style and MUST have the low bit set.
+  Failure to do so will result in hardfaults on reset, etc.
+
+- You can start debugging from reset by asserting RESET, writing 1 to 
+  E000EDFC, then releasing RESET
+
+Linux Generic Serial Driver
+---------------------------
+- class/subclass/protocol 0xff,0x00,0x00 (device and interface)
+- 1 interface, 1 bulk in, 1 bulk out
+- must modprobe usbserial vendor=0x0525 product=0xA4A6
+- must rmmod usbserial before modprobing it if it was previously loaded
+- publishes as /dev/ttyUSBx
+
+STM32F1xx
+---------
+- clock config at boot:
+  - HSI (internal 8MHz osc) is on and ready
+  - SYSCLK = HSI (8MHz)
+  - AHB = SYSCLK / 1
+  - PCLK1 = HCLK / 1
+  - PCLK2 = HCLK / 1
+  - ADCCLK = PCLK2 / 2 (4MHz)
+
+LPC1343
+-------
+- how to trap just before the bootloader jumps to user flash
+  reset-stop
+  watch-rw 0
+  go
+
+gdb
+---
+making the disassembler behave:
+  set architecture armv4m
+  set arm fallback-mode thumb
+
+connecting/disconnecting:
+  target remote | out/gdb-bridge
+  disconnect
+
+turn on tracing for the remote wire protocol
+  set debug remote 1
+
+disassemble 4 instructions at pc
+  x/4i $pc
+
+

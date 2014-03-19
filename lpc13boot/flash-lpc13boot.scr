@@ -1,0 +1,67 @@
+attach
+reset-stop
+reset
+
+reset-stop
+watch-rw 0
+go
+
+wr 10000000 be00be00
+wr sp 10001fc0
+
+# prepare for write
+wr pc 1fff1ff1
+wr lr 10000001
+wr r0 10000010 
+wr r1 10000030
+wr 10000010 .50
+wr 10000014 0
+wr 10000018 0
+go
+
+# erase
+wr pc 1fff1ff1
+wr lr 10000001
+wr r0 10000010
+wr r1 10000030
+wr 10000010 .52
+wr 10000014 0
+wr 10000018 0
+wr 1000001c 2ee0
+go
+reset-stop
+watch-rw 0
+go
+
+# write breakpoint at 10000000 and setup SP
+wr 10000000 be00be00
+wr sp 10001fc0
+
+# prepare for write
+wr pc 1fff1ff1
+wr lr 10000001
+wr r0 10000010 
+wr r1 10000030
+wr 10000010 .50
+wr 10000014 0
+wr 10000018 0
+go
+
+#download out/m3debug.bin 10000800
+download out/lpc13boot.bin 10000800
+
+# write 
+wr pc 1fff1ff1
+wr lr 10000001
+wr r0 10000010
+wr r1 10000030
+wr 10000010 .51
+wr 10000014 00000000
+wr 10000018 10000800
+wr 1000001c 1000
+wr 10000020 2ee0
+go
+
+watch-pc ffffffff
+reset
+go

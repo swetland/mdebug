@@ -1,0 +1,80 @@
+set flash-start 0
+set flash-size 40000
+set flash-block 800
+
+set flash-buffer 20008000
+
+set FLASH_ACR 40022000
+set FLASH_KEYR 40022004
+set FLASH_OPTKEYR 40022008
+set FLASH_SR 4002200c
+set FLASH_CR 40022010
+set FLASH_AR 40022014
+set FLASH_OBR 4002201c
+set FLASH_WRPR 40022020
+
+set FLASH_ENTRY_INIT 20001001
+set FLASH_ENTRY_ERASE_ALL 20001005
+set FLASH_ENTRY_ERASE_PAGE 20001009
+set FLASH_ENTRY_WRITE_PAGE 2000100d
+
+set FLASH_STACK 20008000
+
+function flash-setup
+	attach
+	reset-stop
+
+	download out/stm32f1xx_flash.bin 20001000
+	wr psr 01000000
+	wr pc $FLASH_ENTRY_INIT
+	wr 20007000 be00be00
+	wr lr 20007001
+	wr sp $FLASH_STACK
+
+	go
+	echo flash setup completed
+	dw $FLASH_ACR
+end
+
+function flash-erase-all
+	echo flash-erase-all
+	wr pc $FLASH_ENTRY_ERASE_ALL
+	wr 20007000 be00be00
+	wr lr 20007001
+	wr sp $FLASH_STACK
+
+	go
+	echo flash mass erase completed
+end
+
+function flash-erase
+	echo flash-erase args $1
+
+	wr r0 $1
+	wr pc $FLASH_ENTRY_ERASE_PAGE
+	wr 20007000 be00be00
+	wr lr 20007001
+	wr sp $FLASH_STACK
+
+	go
+	echo flash page erase completed
+end
+
+function flash-write
+	echo flash-write args $1
+
+	wr r0 $1
+	wr pc $FLASH_ENTRY_WRITE_PAGE
+	wr 20007000 be00be00
+	wr lr 20007001
+	wr sp $FLASH_STACK
+
+	go
+	echo flash page write completed
+end
+
+#flash-erase-all
+#dw 08000000
+
+#flash stm32.bin 08000000
+#dw 08000000

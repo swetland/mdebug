@@ -1,0 +1,95 @@
+
+===========================================================================
+          m3dev - tools for embedded ARM Cortex M3 development
+===========================================================================
+
+This project is a collection of (linux-centric) tools for working on
+small embedded systems based on the ARM Cortex M3 CPU.
+
+Original work was done with a STM32F103 part, and much more work has been
+done with LPC13xx series parts.
+
+Everything is either Apache 2 or BSD licensed, to allow for easy,
+no-strings-attached, inclusion in your own projects.  Share and enjoy!
+
+
+m3debug
+-------
+
+Firmware for the "m3debug" and "super-m3debug" boards which use the
+LPC1343 as an engine for the ARM Serial Wire Debug Protocol, in 
+conjunction with the debugger and gdb-bridge programs (described
+below).
+
+A schematic is provided for the original (pretty simplistic) m3debug
+board.
+
+
+swdp 
+----
+
+Firmware for the LeafLabs Maple board to act as a USB<->SW-DP bridge,
+to allow host software to use Serial Wire Debug Protocol to access target
+devices.  It should be usable on just about any STM32F103 board.
+
+GPIO 0 -> SWDIO
+GPIO 1 -> SWCLK
+GPIO 5 -> Activity LED
+
+This was the original prototype and has not been tested in a looong
+time now.
+
+
+debugger & gdb-bridge
+---------------------
+
+A simple standalone debugger and a bridge for the GDB remote protocol
+that commicate with a board running swdp.
+
+
+stm32boot
+---------
+
+A tool to download code to RAM or flash, via the stm32f1xx ROM serial
+bootloader.
+
+
+usbmon
+------
+
+Commandline tool to observe the linux usb stack and io transactions
+through /dev/usbmon*
+
+
+Included Third Party Software
+-----------------------------
+
+linenoise.[ch] 
+  excellent tiny commandline editor (BSD license)
+  https://github.com/antirez/linenoise
+
+
+Useful Documents
+----------------
+
+ARM DDI0337E Cortex M3 r1p1 Technical Reference Manual
+  Has useful details on SW-DP and debug peripherals that was removed
+  in later versions of the TRM as "redundant" with other documents.
+
+
+Historical Notes
+----------------
+
+The original work on this started in 2011 and has been tinkered with
+on a number of repositories by a number of people.  Trying to fold things
+back together and tidy up the build system, etc, ended up being a bit of
+a mess resulting in Brian declaring "history bankruptcy" and starting
+a fresh repository in 2014.
+
+Some random side projects have been removed.  An AUTHORS file has been
+added to provide credit for additional contributors to the codebase.
+
+The code base as of the initial checkin, built with gcc 4.8.2 and
+binutils 2.24 (http://github.com/travisg/toolchains) is verified to
+be able to use a m3debug board to flash the bootloader and app image
+to another m3debug board, which then can repeat the process.

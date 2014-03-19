@@ -1,0 +1,33 @@
+
+- debugger
+  - more script work (integration of erase/flash scripts, etc)
+  - flash support for stm32 parts
+  - async/background usb io (to allow for serial trace, ITM trace, etc)
+  - quieter script execution mode
+
+- m3debug
+  - do some more useful stuff with LEDs
+  - ITM support
+  - serial debug support (feed serial down through usb)
+
+- swdp
+  - fold things together with m3debug
+
+- lpc13boot
+  - reset to a more like-POR state before jumping to app
+  - provide a 'R'eboot protocol command
+  - ability to reflash the bootloader (maybe w/ some sanity check?)
+
+- lpc13xx
+  - clean up library code, more #defines, fewer magic numbers
+  - real baud selection code in serial_init()
+
+- stm32f
+  - usb feature parity
+
+- build system
+  - easy way to build app variants for multiple boards
+    (m3debug for m3debug, maple, etc)
+
+- arm m3
+  - get interrupts, threads, etc going
