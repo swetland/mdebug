@@ -113,6 +113,23 @@
 #define  FLASHTIM_2CYCLE	(1 << 12) /* SYSCLK <= 55MHz */
 #define  FLASHTIM_3CYCLE	(2 << 12) /* SYSCLK <= 72MHz */
 
+/* see UM10736 3.6.33 pp59-60 */
+#define USARTCLKCTRL		0x40074128
+
+#define USBCLKCTRL		0x4007412C
+#define  USB_AUTO_CLK		(0 << 0)
+#define  USB_FORCE_CLK		(1 << 0)
+#define  USB_WAKE_FALLING	(0 << 1)
+#define  USB_WAKE_RISING	(1 << 1)
+
+#define USBCLKST		0x40074130
+#define  USB_NEED_CLK		 1
+
+#define SYSOSCCTRL		0x40074188
+#define  SYSOSC_BYPASS		1 /* sys_osc_clk from xtalin */
+#define  SYSOSC_FREQRANGE_LOW	(0 << 1) /* 1-20MHz */
+#define  SYSOSC_FREQRANGE_HIGH	(1 << 1) /* 15-25MHz */
+
 #define RTCOSCCTRL		0x40074190
 #define  RTCOSC_EN		1
 
@@ -130,7 +147,39 @@
 #define  PLLCTRL_PSEL_8		(2 << 6)
 #define  PLLSTAT_LOCKED		1
 
-#define PARTID			0x400743F8
+/* analog block power control */
+/* PD_* bits *disable* the block in question (PowerDown) */
+/* bits 2:0 must be written as 0s */
+#define PDAWAKECFG		0x40074204
+/* power config on wakeup from deep-sleep or power-down */
+#define PDRUNCFG		0x40074208
+/* power config while running (changes are immediate) */
+#define  PD_IRCOUT		(1 << 3)
+#define  PD_IRC			(1 << 4)
+#define  PD_FLASH		(1 << 5)
+#define  PD_EEPROM		(1 << 6)
+#define  PD_BOD			(1 << 8)
+#define  PD_USBPHY		(1 << 9)
+#define  PD_ADC0		(1 << 10)
+#define  PD_ADC1		(1 << 11)
+#define  PD_DAC			(1 << 12)
+#define  PD_ACMP0		(1 << 13)
+#define  PD_ACMP1		(1 << 14)
+#define  PD_ACMP2		(1 << 15)
+#define  PD_ACMP3		(1 << 16)
+#define  PD_IREF		(1 << 17)
+#define  PD_TS			(1 << 18)
+#define  PD_VDDADIV		(1 << 19)
+#define  PD_WDTOSC		(1 << 20)
+#define  PD_SYSOSC		(1 << 21)  /* requires 500uS delay */
+#define  PD_SYSPLL		(1 << 22)
+#define  PD_USBPLL		(1 << 23)
+#define  PD_SCTPLL		(1 << 24)
+
+#define JTAGIDCODE		0x400743F4
+#define  JTAGID			0x19D6C02B
+
+#define DEVICE_ID0		0x400743F8
 #define  ID_LPC1549		0x00001549
 #define  ID_LPC1548		0x00001548
 #define  ID_LPC1547		0x00001547
@@ -138,6 +187,7 @@
 #define  ID_LPC1518		0x00001518
 #define  ID_LPC1517		0x00001517
 
-#define REVID			0x400743FC
+#define DEVICE_ID1		0x400743FC
+/* boot rom and die revision */
 
 #endif
