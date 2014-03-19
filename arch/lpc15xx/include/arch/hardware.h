@@ -1,6 +1,9 @@
 #ifndef _LPC15XX_HARDWARE_H_
 #define _LPC15XX_HARDWARE_H_
 
+#include <fw/types.h>
+#include <fw/io.h>
+
 #define MAINCLKSELA		0x40074080
 #define  SELA_IRC_OSC		0x0
 #define  SELA_SYS_OSC		0x1
@@ -189,5 +192,193 @@
 
 #define DEVICE_ID1		0x400743FC
 /* boot rom and die revision */
+
+/* pins        analog  glitch  digital  high-drive  i2c / true */
+/*             func    fliter  filter   output      open drain */
+/* 0_0:0_17    Y       Y       Y        N           N          */
+/* 0_18:0_21   N       N       Y        N           N          */
+/* 0_22:0_23   N       N       Y        N           Y          */
+/* 0_24        N       N       Y        Y           N          */
+/* 0_25:0_31   Y       Y       Y        N           N          */
+/* 1_0:1_10    Y       Y       Y        N           N          */
+/* 1_11:1_31   N       N       Y        N           N          */
+/* 2_0:2_2     Y       Y       Y        N           N          */
+/* 2_3:2_13    N       N       Y        N           N          */
+
+#define IOCON_PIO(m,n)		(0x400F8000 + ((m)*32+(n))*4)
+
+#define IOCON_MODE_INACTIVE	(0 << 3)  /* mode */
+#define IOCON_MODE_PULL_DOWN	(1 << 3)
+#define IOCON_MODE_PULL_UP	(2 << 3)
+#define IOCON_MODE_REPEATER	(3 << 3)
+#define IOCON_MODE_I2C          (0 << 3)  /* required for 0_22 & 0_23 */
+
+#define IOCON_HYSTERESIS_DIS	(0 << 5)
+#define IOCON_HYSTERESIS_ENA	(1 << 5)
+#define IOCON_HYSTERESIS_I2C    (0 << 5)  /* required for 0_22 & 0_23 */
+
+#define IOCON_INPUT_NORMAL	(0 << 6)  /* invert input */
+#define IOCON_INPUT_INVERT	(1 << 6)
+
+#define IOCON_GLITCH_FILTER_DIS	(0 << 8)  /* 10ns glitch filter */
+#define IOCON_GLICTH_FILTER_ENA	(1 << 8)
+
+#define IOCON_OPEN_DRAIN_DIS	(0 << 10) /* open drain mode */
+#define IOCON_OPEN_DRAIN_ENA	(1 << 10) /* pseudo- except on 0_22 & 0_23 */
+
+#define IOCON_FILTER_BYPASS	(0 << 11) /* digital filter */
+#define IOCON_FILTER_1CLOCK	(1 << 11)
+#define IOCON_FILTER_2CLOCK	(2 << 11)
+#define IOCON_FILTER_3CLOCK	(3 << 11)
+#define IOCON_FILTER_PCLK	(0 << 13)
+#define IOCON_FILTER_PCLK_2	(1 << 13)
+#define IOCON_FILTER_PCLK_4	(2 << 13)
+#define IOCON_FILTER_PCLK_8	(3 << 13)
+#define IOCON_FILTER_PCLK_16	(4 << 13)
+#define IOCON_FILTER_PCLK_32	(5 << 13)
+#define IOCON_FILTER_PCLK_64	(6 << 13)
+
+#define IOCON_I2C_FAST_I2C	(0 << 8)  /* i2c only (0_22 & 0_23) */
+#define IOCON_I2C_STANDARD_IO	(1 << 8)
+#define IOCON_I2C_FAST_PLUS_I2C (2 << 8)
+
+#define FUNC_UART0_TXD		0
+#define FUNC_UART0_RXD		1
+#define FUNC_UART0_RTS		2
+#define FUNC_UART0_CTS		3
+#define FUNC_UART0_SCLK		4
+#define FUNC_UART1_TXD		5
+#define FUNC_UART1_RXD		6
+#define FUNC_UART1_RTS		7
+#define FUNC_UART1_CTS		8
+#define FUNC_UART1_SCLK		9
+#define FUNC_UART2_TXD		10
+#define FUNC_UART2_RXD		11
+#define FUNC_UART2_SCLK		12
+#define FUNC_SPI0_SCK		13
+#define FUNC_SPI0_MOSI		14
+#define FUNC_SPI0_MISO		15
+#define FUNC_SPI0_SSEL0		16
+#define FUNC_SPI0_SSEL1		17
+#define FUNC_SPI0_SSEL2		18
+#define FUNC_SPI0_SSEL3		19
+#define FUNC_SPI1_SCK		20
+#define FUNC_SPI1_MOSI		21
+#define FUNC_SPI1_MISO		22
+#define FUNC_SPI1_SSEL0		23
+#define FUNC_SPI1_SSEL1		24
+#define FUNC_CAN0_TD		25
+#define FUNC_CAN0_RD		26
+#define FUNC_USB_VBUS		28
+#define FUNC_SCT0_OUT0		29
+#define FUNC_SCT0_OUT1		30
+#define FUNC_SCT0_OUT2		31
+#define FUNC_SCT1_OUT0		32
+#define FUNC_SCT1_OUT1		33
+#define FUNC_SCT1_OUT2		34
+#define FUNC_SCT2_OUT0		35
+#define FUNC_SCT2_OUT1		36
+#define FUNC_SCT2_OUT2		37
+#define FUNC_SCT3_OUT0		38
+#define FUNC_SCT3_OUT1		39
+#define FUNC_SCT3_OUT2		40
+#define FUNC_SCT_ABORT0		41
+#define FUNC_SCT_ABORT1		42
+#define FUNC_ADC0_PINTRIG0	43
+#define FUNC_ADC0_PINTRIG1	44
+#define FUNC_ADC1_PINTRIG0	45
+#define FUNC_ADC1_PINTRIG1	46
+#define FUNC_DAC_PINTRIG	47
+#define FUNC_DAC_SHUTOFF	48
+#define FUNC_ACMP0_O		49
+#define FUNC_ACMP1_O		50
+#define FUNC_ACMP2_O		51
+#define FUNC_ACMP3_O		52
+#define FUNC_CLKOUT		53
+#define FUNC_ROSC		54
+#define FUNC_ROSC_RESET		55
+#define FUNC_USB_FTOGGLE	56
+#define FUNC_QEI_PHA		57
+#define FUNC_QEI_PHB		58
+#define FUNC_QEI_IDX		59
+#define FUNC_GPIO_INT_BMAT	60
+#define FUNC_SWO		61
+
+#define PIO_IDX_NONE		0xFF
+#define PIO_IDX(n,m)		(((n)*32) + m)
+
+#define PINASSIGN(func)		(0x4003800+((func)/4))
+#define  PA_SHIFT(func)		(((func) & 3) * 8)
+#define  PA_MASK(func)		(~(0xFF << PA_SHIFT(func)))
+
+static inline pin_assign(u32 func, u32 pio_idx) {
+	u32 r = PINASSIGN(func);
+	u32 v = readl(v);
+	writel((v & PA_MASK(func)) | (pio_idx << PA_SHIFT(func)), r);
+}
+
+/* fixed-functions are enabled by *clearing* their bit */
+/* enabled fixed-functions override gpio or output matrix */
+#define PINENABLE0		0x400381C0
+#define  PE0_ADC0_0_ON_0_8	(1 << 0)
+#define  PE0_ADC0_1_ON_0_7	(1 << 1)
+#define  PE0_ADC0_2_ON_0_6	(1 << 2)
+#define  PE0_ADC0_3_ON_0_5	(1 << 3)
+#define  PE0_ADC0_4_ON_0_4	(1 << 4)
+#define  PE0_ADC0_5_ON_0_3	(1 << 5)
+#define  PE0_ADC0_6_ON_0_2	(1 << 6)
+#define  PE0_ADC0_7_ON_0_1	(1 << 7)
+#define  PE0_ADC0_8_ON_1_0	(1 << 8)
+#define  PE0_ADC0_9_ON_0_31	(1 << 9)
+#define  PE0_ADC0_10_ON_0_0	(1 << 10)
+#define  PE0_ADC0_11_ON_0_30	(1 << 11)
+#define  PE0_ADC1_0_ON_1_1	(1 << 12)
+#define  PE0_ADC1_1_ON_0_9	(1 << 13)
+#define  PE0_ADC1_2_ON_0_10	(1 << 14)
+#define  PE0_ADC1_3_ON_0_11	(1 << 15)
+#define  PE0_ADC1_4_ON_1_2	(1 << 16)
+#define  PE0_ADC1_5_ON_1_3	(1 << 17)
+#define  PE0_ADC1_6_ON_0_13	(1 << 18)
+#define  PE0_ADC1_7_ON_0_14	(1 << 19)
+#define  PE0_ADC1_8_ON_0_15	(1 << 20)
+#define  PE0_ADC1_9_ON_0_16	(1 << 21)
+#define  PE0_ADC1_10_ON_1_4	(1 << 22)
+#define  PE0_ADC1_11_ON_1_5	(1 << 23)
+#define  PE0_DAC_OUT_ON_0_12	(1 << 24)
+#define  PE0_ACMP_I1_ON_0_27	(1 << 25)
+#define  PE0_ACMP_I2_ON_1_6	(1 << 26)
+#define  PE0_ACMP0_I3_ON_0_26	(1 << 27)
+#define  PE0_ACMP0_I4_ON_0_25	(1 << 28)
+#define  PE0_ACMP1_I3_ON_0_28	(1 << 29)
+#define  PE0_ACMP1_I4_ON_1_10	(1 << 30)
+#define  PE0_ACMP2_I3_ON_0_29	(1 << 31)
+
+/* fixed-functions are enabled by *clearing* their bit */
+/* enabled fixed-functions override gpio or output matrix */
+#define PINENABLE1		0x400381C4
+#define  PE1_ACMP2_I4_ON_1_9	(1 << 0)
+#define  PE1_ACMP3_I3_ON_1_8	(1 << 1)
+#define  PE1_ACMP3_I4_ON_1_7	(1 << 2)
+#define  PE1_I2C0_SDA_ON_0_23	(1 << 3)
+#define  PE1_I2C0_SCL_ON_0_24	(1 << 4)
+#define  PE1_SCT0_OUT3_ON_0_0	(1 << 5)
+#define  PE1_SCT0_OUT4_ON_0_1	(1 << 6)
+#define  PE1_SCT0_OUT5_ON_0_18	(1 << 7)
+#define  PE1_SCT0_OUT6_ON_0_24	(1 << 8)
+#define  PE1_SCT0_OUT7_ON_1_14	(1 << 9)
+#define  PE1_SCT1_OUT3_ON_0_2	(1 << 10)
+#define  PE1_SCT1_OUT4_ON_0_3	(1 << 11)
+#define  PE1_SCT1_OUT5_ON_0_14	(1 << 12)
+#define  PE1_SCT1_OUT6_ON_0_20	(1 << 13)
+#define  PE1_SCT1_OUT7_ON_1_17	(1 << 14)
+#define  PE1_SCT2_OUT3_ON_0_6	(1 << 15)
+#define  PE1_SCT2_OUT4_ON_0_29	(1 << 16)
+#define  PE1_SCT2_OUT5_ON_1_20	(1 << 17)
+#define  PE1_SCT3_OUT3_ON_0_26	(1 << 18)
+#define  PE1_SCT3_OUT4_ON_1_8	(1 << 19)
+#define  PE1_SCT3_OUT5_ON_1_24	(1 << 20)
+#define  PE1_RESETN_ON_0_21	(1 << 21)
+#define  PE1_SWCLK_ON_0_19	(1 << 22)
+#define  PE1_SWDIO_ON_0_20	(1 << 23)
 
 #endif
