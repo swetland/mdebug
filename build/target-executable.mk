@@ -94,9 +94,11 @@ $(M_CONFIG_H): Makefile $(M_MAKEFILE) $(CHIP_$(M_CHIP)_DEPS)
 	@echo generate $@
 	@$(call make-config-header,$@,$(_CFG))
 
-$(M_OUT_BIN): $(M_OUT_ELF)
+$(M_OUT_BIN): _SIGN := $(if $(M_SIGN),$(M_SIGN),true)
+$(M_OUT_BIN): $(M_OUT_ELF) $(M_SIGN)
 	@echo create $@
-	$(QUIET)$(TARGET_OBJCOPY) --gap-fill=0xee -O binary $< $@
+	$(QUIET)$(TARGET_OBJCOPY) --gap-fill=0xee -O binary $< $@.tmp
+	$(QUIET)$(_SIGN) $@.tmp && mv $@.tmp $@
 
 $(M_OUT_LST): $(M_OUT_ELF)
 	@echo create $@
@@ -117,3 +119,4 @@ M_BASE :=
 M_LIBS :=
 M_CFLAGS :=
 M_CONFIG :=
+M_SIGN :=
