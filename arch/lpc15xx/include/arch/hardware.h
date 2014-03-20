@@ -205,7 +205,10 @@
 /* 2_0:2_2     Y       Y       Y        N           N          */
 /* 2_3:2_13    N       N       Y        N           N          */
 
-#define IOCON_PIO(m,n)		(0x400F8000 + ((m)*32+(n))*4)
+#define PIO_IDX_NONE		0xFF
+#define PIO_IDX(m,n)		(((m) << 5) + n)
+
+#define IOCON_PIO(m,n)		(0x400F8000 + (PIO_IDX(m,n) << 2))
 
 #define IOCON_MODE_INACTIVE	(0 << 3)  /* mode */
 #define IOCON_MODE_PULL_DOWN	(1 << 3)
@@ -304,14 +307,11 @@
 #define FUNC_GPIO_INT_BMAT	60
 #define FUNC_SWO		61
 
-#define PIO_IDX_NONE		0xFF
-#define PIO_IDX(n,m)		(((n)*32) + m)
-
 #define PINASSIGN(func)		(0x4003800+((func)/4))
 #define  PA_SHIFT(func)		(((func) & 3) * 8)
 #define  PA_MASK(func)		(~(0xFF << PA_SHIFT(func)))
 
-static inline pin_assign(u32 func, u32 pio_idx) {
+static inline void pin_assign(u32 func, u32 pio_idx) {
 	u32 r = PINASSIGN(func);
 	u32 v = readl(v);
 	writel((v & PA_MASK(func)) | (pio_idx << PA_SHIFT(func)), r);
@@ -380,5 +380,50 @@ static inline pin_assign(u32 func, u32 pio_idx) {
 #define  PE1_RESETN_ON_0_21	(1 << 21)
 #define  PE1_SWCLK_ON_0_19	(1 << 22)
 #define  PE1_SWDIO_ON_0_20	(1 << 23)
+
+/* GPIO */
+
+/* Transform PIOm_n to GPIO index number */
+#define GPIO_IDX(m, n)		(((m) * 32) + (n))
+
+/* Reads as 0x00 or 0x01 (gpio is 0 or 1) */
+/* Write 0 to clear 1 to set gpio, bits 1:7 ignored */
+#define GPIO_BYTE(idx)		(0x1C000000 + (idx))
+
+/* Reads as 0x00000000 or 0xFFFFFFFF (gpio is 0 or 1) */
+/* Write 0 to clear, nonzero to set gpio */
+#define GPIO_WORD(idx)		(0x1C001000 + ((idx) * 4))
+
+/* bit 0..31 are direction of io 0..31 for that port */
+/* 0 is input, 1 is output */
+#define GPIO0_DIR		0x1C002000
+#define GPIO1_DIR		0x1C002004
+#define GPIO2_DIR		0x1C002008
+
+/* determine which ports are visible via MPORT regs (0=vis 1=masked) */
+#define GPIO0_MASK		0x1C002080
+#define GPIO1_MASK		0x1C002084
+#define GPIO2_MASK		0x1C002088
+
+/* raw access, read returns gpio status, write sets status */
+#define GPIO0_PORT		0x1C002100
+#define GPIO1_PORT		0x1C002104
+#define GPIO2_PORT		0x1C002108
+
+/* masked access */
+#define GPIO0_MPORT		0x1C002180
+#define GPIO1_MPORT		0x1C002184
+#define GPIO2_MPORT		0x1C002188
+
+/* set/clear/toggle registers - write 1 to take action, 0 is no-op */
+#define GPIO0_SET		0x1C002200
+#define GPIO1_SET		0x1C002204
+#define GPIO2_SET		0x1C002208
+#define GPIO0_CLR		0x1C002280
+#define GPIO1_CLR		0x1C002284
+#define GPIO2_CLR		0x1C002288
+#define GPIO0_TGL		0x1C002300
+#define GPIO1_TGL		0x1C002304
+#define GPIO2_TGL		0x1C002308
 
 #endif

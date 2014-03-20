@@ -22,5 +22,6 @@ ARCH_lpc15xx_START := arch/arm-cm3/start.o
 ARCH_lpc15xx_CONFIG := \
 	ARCH_LPC15XX=1 \
 	STACKTOP=0x02008f00
-ARCH_lpc15xx_OBJS :=
+ARCH_lpc15xx_OBJS := \
+	arch/lpc15xx/gpio.o
 
