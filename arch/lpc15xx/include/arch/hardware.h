@@ -193,6 +193,26 @@
 #define DEVICE_ID1		0x400743FC
 /* boot rom and die revision */
 
+#define FREQMEAS_CTRL		0x40074120
+#define  FMCAPVALMASK		0x00003FFF
+#define  FMPROG			(1 << 31)  /* set to start, hw clears */
+
+/* these are in the input mux block */
+#define FREQMEAS_REF		0x40014160
+#define FREQMEAS_TARGET		0x40014164
+#define  FMSRC_SYS_OSC		0x0
+#define  FMSRC_IRC_OSC		0x1
+#define  FMSRC_WDG_OSC		0x2
+#define  FMSRC_32K_OSC		0x3
+#define  FMSRC_USB_FTOGGLE	0x4
+#define  FMSRC_PIO_0_5		0x5
+#define  FMSRC_PIO_0_19		0x6
+#define  FMSRC_PIO_0_30		0x7
+#define  FMSRC_PIO_1_27		0x8
+#define  FMSRC_NONE		0xF
+
+
+
 /* pins        analog  glitch  digital  high-drive  i2c / true */
 /*             func    fliter  filter   output      open drain */
 /* 0_0:0_17    Y       Y       Y        N           N          */
