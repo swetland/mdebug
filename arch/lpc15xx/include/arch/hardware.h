@@ -307,13 +307,13 @@
 #define FUNC_GPIO_INT_BMAT	60
 #define FUNC_SWO		61
 
-#define PINASSIGN(func)		(0x4003800+((func)/4))
-#define  PA_SHIFT(func)		(((func) & 3) * 8)
+#define PINASSIGN(func)		(0x40038000+((func)&(~3)))
+#define  PA_SHIFT(func)		(((func) & 3) << 3)
 #define  PA_MASK(func)		(~(0xFF << PA_SHIFT(func)))
 
 static inline void pin_assign(u32 func, u32 pio_idx) {
 	u32 r = PINASSIGN(func);
-	u32 v = readl(v);
+	u32 v = readl(r);
 	writel((v & PA_MASK(func)) | (pio_idx << PA_SHIFT(func)), r);
 }
 
