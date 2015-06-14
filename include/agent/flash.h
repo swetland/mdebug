@@ -38,16 +38,25 @@ typedef struct flash_agent {
 	u32 reserved2;
 	u32 reserved3;
 
+#ifdef _AGENT_HOST_
+	u32 setup;
+	u32 erase;
+	u32 write;
+	u32 ioctl;
+#else
 	int (*setup)(struct flash_agent *agent);
 	int (*erase)(u32 flash_addr, u32 length);
 	int (*write)(u32 flash_addr, const void *data, u32 length);
 	int (*ioctl)(u32 op, void *ptr, u32 arg0, u32 arg1);
+#endif
 } flash_agent;
 
+#ifndef _AGENT_HOST_
 int flash_agent_setup(flash_agent *agent);
 int flash_agent_erase(u32 flash_addr, u32 length);
 int flash_agent_write(u32 flash_addr, const void *data, u32 length);
 int flash_agent_ioctl(u32 op, void *ptr, u32 arg0, u32 arg1);
+#endif
 
 #define ERR_NONE	0
 #define ERR_FAIL	-1
