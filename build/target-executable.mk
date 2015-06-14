@@ -90,9 +90,12 @@ $(M_ARCH_OBJS): _CFLAGS := --include $(M_CONFIG_H) $(M_ARCH_CFLAGS) $(M_CFLAGS)
 $(M_OBJS): $(M_CONFIG_H)
 $(M_ARCH_OBJS): $(M_CONFIG_H)
 
+X_CONFIG := FLASHSIZE=$(CHIP_$(M_CHIP)_ROMSIZE)
+X_CONFIG += FLASHADDR=$(CHIP_$(M_CHIP)_ROMBASE)
+
 # generate config header from module, chip, and arch config lists
 # generated config header depends on toplevel, module, and chip/arch makefiles
-$(M_CONFIG_H): _CFG := $(M_CONFIG) $(CHIP_$(M_CHIP)_CONFIG) $(ARCH_$(M_ARCH)_CONFIG)
+$(M_CONFIG_H): _CFG := $(M_CONFIG) $(CHIP_$(M_CHIP)_CONFIG) $(ARCH_$(M_ARCH)_CONFIG) $(X_CONFIG)
 $(M_CONFIG_H): Makefile $(M_MAKEFILE) $(CHIP_$(M_CHIP)_DEPS)
 	@$(MKDIR)
 	@echo generate $@
