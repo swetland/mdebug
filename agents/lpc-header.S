@@ -8,10 +8,10 @@ _start:
 	.long 0x00010000	// version
 	.long 0x00000001	// flags
 	.long _start
-	.long 0x02001000	// data addr
+	.long _start + 0x400	// data addr
 	.long 0x00001000	// data size
-	.long 0x00000000	// flash addr
-	.long 0x00010000	// flash size
+	.long CONFIG_FLASHADDR	// flash addr
+	.long CONFIG_FLASHSIZE	// flash size
 	.long 0
 	.long 0
 	.long 0

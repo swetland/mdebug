@@ -16,7 +16,12 @@
 
 #include <agent/flash.h>
 
+#ifdef CONFIG_ARCH_LPC15XX
 #define LPC_IAP_FUNC	0x03000205
+#else
+#define LPC_IAP_FUNC	0x1fff1ff1
+#endif
+
 #define LPC_IAP_PREPARE	50
 #define LPC_IAP_WRITE	51
 #define LPC_IAP_ERASE	52

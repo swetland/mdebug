@@ -16,7 +16,7 @@ $(call chip,lpc1547-blr,lpc15xx,0x02002c00,0x00000400,0x00000000,0x00001000,rom)
 $(call chip,lpc1547-app,lpc15xx,0x02000000,0x00003000,0x00001000,0x0000F000,rom)
 
 # flash agent
-$(call chip,lpc1547-agt,lpc15xx,0x02000400,0x00000800,0x00000000,0x00000000,ram)
+$(call chip,lpc1547-agt,lpc15xx,0x02000400,0x00000400,0x00000000,0x00010000,ram)
 
 ARCH_lpc15xx_CFLAGS := \
 	-Iarch/lpc15xx/include \

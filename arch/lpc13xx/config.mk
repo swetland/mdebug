@@ -11,6 +11,7 @@ $(call chip,lpc1343-app,lpc13xx_v1,0x10000000,0x00002000,0x00001000,0x00007000,r
 $(call chip,lpc1345-rom,lpc13xx_v2,0x10000000,0x00002000,0x00000000,0x00008000,rom)
 $(call chip,lpc1347-rom,lpc13xx_v2,0x10000000,0x00002000,0x00000000,0x00008000,rom)
 
+$(call chip,lpc1343-agt,lpc13xx_v1,0x10000400,0x00000400,0x00000000,0x00008000,ram)
 
 ARCH_lpc13xx_v1_CFLAGS := -Iarch/lpc13xx/include
 ARCH_lpc13xx_v1_CFLAGS += -Iarch/lpc13xx/include-v1
