@@ -35,6 +35,9 @@
 
 #include "debugger.h"
 
+#define _AGENT_HOST_ 1
+#include <agent/flash.h>
+
 extern struct debugger_command debugger_commands[];
 
 long long now() {
@@ -365,85 +368,6 @@ int do_download(int argc, param *argv) {
 	return 0;
 }
 
-int do_flash(int argc, param *argv) {
-	u32 addr, xfer, size;
-	u32 flash_buffer, flash_start, flash_size, flash_block;
-	u8 data[512*1024], *p;
-	int fd, r;
-
-	if (argc != 2) {
-		xprintf("error: usage: flash <file> <addr>\n");
-		return -1;
-	}
-
-	if (debugger_variable("flash-buffer", &flash_buffer) ||
-		debugger_variable("flash-start", &flash_start) ||
-		debugger_variable("flash-size", &flash_size) ||
-		debugger_variable("flash-block", &flash_block)) {
-		xprintf("error: flash script missing or invalid\n");
-		return -1;
-	}
-
-	addr = argv[1].n;
-
-	if (addr & (flash_block - 1)) {
-		xprintf("error: address unaligned with blocksize 0x%08x\n",
-			flash_block);
-		return -1;
-	}
-	if (addr < flash_start) {
-		xprintf("error: start address less than flash start (0x%08x)\n",
-			flash_start);
-		return -1;
-	}
-
-	/* adjust available size based on offset */
-	flash_size -= (addr - flash_start);
-	
-	memset(data, 0xff, sizeof(data));
-
-	fd = open(argv[0].s, O_RDONLY);
-	r = read(fd, data, sizeof(data));
-	if ((fd < 0) || (r < 0)) {
-		xprintf("error: cannot read '%s'\n", argv[0].s);
-		return -1;
-	}
-	r = (r + 3) & ~3;
-	size = r;
-	if (size > flash_size) {
-		xprintf("error: %d bytes does not fit in %d byte flash region\n",
-			size, flash_size);
-		return -1;
-	}
-
-	if (debugger_invoke("flash-setup", 0)) {
-		xprintf("error: flash setup failed (@0x%08x)\n", addr);
-		return -1;
-	}
-	p = data;
-	while (size > 0) {
-		xfer = (size > flash_block) ? flash_block : size;
-		if (swdp_ahb_write32(flash_buffer, (void*) p, xfer / 4)) {
-			xprintf("error: failed to write data\n");
-			return -1;
-		}
-		if (debugger_invoke("flash-erase", 1, addr)) {
-			xprintf("error: flash erase failed (@0x%08x)\n", addr);
-			return -1;
-		}
-		if (debugger_invoke("flash-write", 1, addr)) {
-			xprintf("error: flash write failed (@0x%08x)\n", addr);
-			return -1;
-		}
-		addr += xfer;
-		size -= xfer;
-		p += xfer;
-	}
-	return 0;
-}
-
-
-
 int do_reset(int argc, param *argv) {
 	swdp_core_halt();	
 	swdp_ahb_write(CDBG_EMCR, 0);
@@ -532,6 +456,189 @@ int do_help(int argc, param *argv) {
 	return 0;
 }
 
+void *load_file(const char *fn, size_t *_sz) {
+	int fd;
+	off_t sz;
+	void *data = NULL;
+	fd = open(fn, O_RDONLY);
+	if (fd < 0) goto fail;
+	sz = lseek(fd, 0, SEEK_END);
+	if (sz < 0) goto fail;
+	if (lseek(fd, 0, SEEK_SET)) goto fail;
+	if ((data = malloc(sz + 4)) == NULL) goto fail;
+	if (read(fd, data, sz) != sz) goto fail;
+	*_sz = sz;
+	return data;
+fail:
+	if (data) free(data);
+	if (fd >= 0) close(fd);
+	return NULL;
+}
+
+int invoke(u32 agent, u32 func, u32 r0, u32 r1, u32 r2, u32 r3) {
+	swdp_core_write(0, r0);
+	swdp_core_write(1, r1);
+	swdp_core_write(2, r2);
+	swdp_core_write(3, r3);
+	swdp_core_write(13, agent - 4);
+	swdp_core_write(14, agent | 1); // include T bit
+	swdp_core_write(15, func | 1); // include T bit
+
+	// todo: readback and verify?
+
+	xprintf("invoke <func@%08x>(0x%x,0x%x,0x%x,0x%x)\n", func, r0, r1, r2, r3);
+
+	swdp_core_resume();
+	if (swdp_core_wait_for_halt() == 0) {
+		// todo: timeout after a few seconds?
+		u32 pc = 0xffffffff, res = 0xffffffff;
+		swdp_core_read(0, &res);
+		swdp_core_read(15, &pc);
+		if (pc != agent) {
+			xprintf("error: pc (%08x) is not at %08x\n", pc, agent);
+			return -1;
+		}
+		if (res) xprintf("failure code %08x\n", res);
+		return res;
+	}
+	xprintf("interrupted\n");
+	return -1;
+}
+
+int run_flash_agent(u32 flashaddr, void *data, size_t data_sz) {
+	flash_agent *agent = NULL;
+	size_t agent_sz;
+
+	if ((agent = load_file("out/agent-lpc15xx.bin", &agent_sz)) == NULL) {
+		xprintf("error: cannot load flash agent\n");
+		goto fail;
+	}
+	// sanity check
+	if ((agent_sz < sizeof(flash_agent)) ||
+		(agent->magic != AGENT_MAGIC) ||
+		(agent->version != AGENT_VERSION)) {
+		xprintf("error: invalid agent image\n");
+		goto fail;
+	}
+	// replace magic with bkpt instructions
+	agent->magic = 0xbe00be00;
+
+	if (do_attach(0,0)) {
+		xprintf("error: failed to attach\n");
+		goto fail;
+	}
+	do_reset_stop(0,0);
+
+	if (agent->flags & FLAG_BOOT_ROM_HACK) {
+		xprintf("executing boot rom\n");
+		if (swdp_watchpoint_rw(0, 0)) {
+			goto fail;
+		}
+		do_resume(0,0);
+		// todo: timeout?
+		// todo: confirm halted
+	}
+
+	if (swdp_ahb_write32(agent->load_addr, (void*) agent, agent_sz / 4)) {
+		xprintf("error: failed to download agent\n");
+		goto fail;
+	}
+	if (invoke(agent->load_addr, agent->setup, 0, 0, 0, 0)) {
+		goto fail;
+	}
+	if (swdp_ahb_read32(agent->load_addr + 16, (void*) &agent->data_addr, 4)) {
+		goto fail;
+	}
+	xprintf("agent %d @%08x, buffer %dK @%08x, flash %dK @%08x\n",
+		agent_sz, agent->load_addr,
+		agent->data_size / 1024, agent->data_addr,
+		agent->flash_size / 1024, agent->flash_addr);
+
+	if ((flashaddr == 0) && (data == NULL) && (data_sz == 0xFFFFFFFF)) {
+		// erase all
+		flashaddr = agent->flash_addr;
+		data_sz = agent->flash_size;
+	}
+
+	if ((flashaddr < agent->flash_addr) ||
+		(data_sz > agent->flash_size) ||
+		((flashaddr + data_sz) > (agent->flash_addr + agent->flash_size))) {
+		xprintf("invalid flash address %08x\n", flashaddr);
+		goto fail;
+	}
+
+	if (data == NULL) {
+		// erase
+		if (invoke(agent->load_addr, agent->erase, flashaddr, data_sz, 0, 0)) {
+			xprintf("failed to erase %d bytes at %08x\n", data_sz, flashaddr);
+			goto fail;
+		}
+	} else {
+		// write
+		u8 *ptr = (void*) data;
+		u32 xfer;
+		xprintf("flashing %d bytes at %08x...\n", data_sz, flashaddr);
+		if (invoke(agent->load_addr, agent->erase, flashaddr, data_sz, 0, 0)) {
+			xprintf("failed to erase %d bytes at %08x\n", data_sz, flashaddr);
+			goto fail;
+		}
+		while (data_sz > 0) {
+			if (data_sz > agent->data_size) {
+				xfer = agent->data_size;
+			} else {
+				xfer = data_sz;
+			}
+			if (swdp_ahb_write32(agent->data_addr, (void*) ptr, xfer / 4)) {
+				xprintf("download to %08x failed\n", agent->data_addr);
+				goto fail;
+			}
+			if (invoke(agent->load_addr, agent->write,
+				flashaddr, agent->data_addr, xfer, 0)) {
+				xprintf("failed to flash %d bytes to %08x\n", xfer, flashaddr);
+				goto fail;
+			}
+			ptr += xfer;
+			data_sz -= xfer;
+			flashaddr += xfer;
+		}
+	}
+
+	free(agent);
+	if (data) free(data);
+	return 0;
+fail:
+	if (agent) free(agent);
+	if (data) free(data);
+	return -1;
+}
+
+int do_flash(int argc, param *argv) {
+	void *data = NULL;
+	size_t data_sz;
+	if (argc != 2) {
+		xprintf("error: usage: flash <file> <addr>\n");
+		return -1;
+	}
+	if ((data = load_file(argv[0].s, &data_sz)) == NULL) {
+		xprintf("error: cannot load '%s'\n", argv[0].s);
+		return -1;
+	}
+	// word align
+	data_sz = (data_sz + 3) & ~3;
+	return run_flash_agent(argv[1].n, data, data_sz);
+}
+
+int do_erase(int argc, param *argv) {
+	if ((argc == 1) && !strcmp(argv[0].s, "all")) {
+		return run_flash_agent(0, NULL, 0xFFFFFFFF);
+	}
+	if (argc != 2) {
+		xprintf("error: usage: erase <addr> <length> | erase all\n");
+		return -1;
+	}
+	return run_flash_agent(argv[0].n, NULL, argv[1].n);
+}
+
 struct debugger_command debugger_commands[] = {
 	{ "exit",	"", do_exit,	"" },
 	{ "attach",	"", do_attach,	"attach/reattach to sw-dp" },
@@ -545,6 +652,7 @@ struct debugger_command debugger_commands[] = {
 	{ "wr",		"", do_wr,	"write register" },
 	{ "download",	"", do_download,"download file to device" },
 	{ "flash",	"", do_flash,	"write file to device flash" },
+	{ "erase",	"", do_erase,	"erase flash" },
 	{ "reset",	"", do_reset,	"reset target" },
 	{ "reset-stop",	"", do_reset_stop, "reset target and halt cpu" },
 	{ "watch-pc",	"", do_watch_pc, "set watchpoint at addr" },
