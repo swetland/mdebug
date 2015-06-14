@@ -15,6 +15,10 @@
 M_NAME := $(strip $(M_NAME))
 M_CHIP := $(strip $(M_CHIP))
 
+ifeq ($(strip $(M_START)),)
+M_START := $(ARCH_$(M_ARCH)_START) 
+endif
+
 M_ARCH := $(CHIP_$(M_CHIP)_ARCH)
 M_ARCH_CFLAGS := $(ARCH_$(M_ARCH)_CFLAGS)
 M_ARCH_OBJS := $(ARCH_$(M_ARCH)_OBJS)
@@ -31,7 +35,7 @@ $(error $(M_MAKEFILE): Module $(M_NAME): Unknown Architecture: $(M_ARCH))
 endif
 
 # architecture start glue goes first
-M_OBJS := $(ARCH_$(M_ARCH)_START) $(M_OBJS)
+M_OBJS := $(M_START) $(M_OBJS)
 M_OBJS := $(addprefix $(OUT_TARGET_OBJ)/$(M_NAME)/,$(M_OBJS))
 M_ARCH_OBJS := $(addprefix $(OUT_TARGET_OBJ)/$(M_NAME)/,$(M_ARCH_OBJS))
 
@@ -113,6 +117,7 @@ $(M_OUT_ELF): $(M_OBJS) $(M_ARCH_LIB) $(M_LINK_SCRIPT)
 
 $(info module $(M_NAME))
 
+M_START :=
 M_OBJS :=
 M_NAME :=
 M_BASE :=
