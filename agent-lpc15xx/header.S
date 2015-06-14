@@ -12,6 +12,10 @@ _start:
 	.long 0x00001000	// data size
 	.long 0x00000000	// flash addr
 	.long 0x00010000	// flash size
+	.long 0
+	.long 0
+	.long 0
+	.long 0
 	.long flash_agent_setup + 1
 	.long flash_agent_erase + 1
 	.long flash_agent_write + 1
