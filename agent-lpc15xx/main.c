@@ -16,19 +16,23 @@
 
 #include <agent/flash.h>
 
-#define LPC_IAP_FUNC	0x03000201
+#define LPC_IAP_FUNC	0x03000205
 #define LPC_IAP_PREPARE	50
 #define LPC_IAP_WRITE	51
 #define LPC_IAP_ERASE	52
 
-void (*romcall)(u32 *param, u32 *status) = (void*) LPC_IAP_FUNC;
+// Note that while the databook claims you can reuse the same array
+// for both parameters and results, this is a lie.  Attempting to 
+// do so causes an invalid command failure.
+
 
 int flash_agent_setup(flash_agent *agent) {
 	return ERR_NONE;
 }
 
 int flash_agent_erase(u32 flash_addr, u32 length) {
-	u32 p[5];
+	void (*romcall)(u32 *, u32 *) = (void*) LPC_IAP_FUNC;
+	u32 p[5],r[4];
 	u32 page = flash_addr >> 12;
 	u32 last = page + ((length - 1) >> 12);
 	if (flash_addr & 0xFFF) {
@@ -38,8 +42,8 @@ int flash_agent_erase(u32 flash_addr, u32 length) {
 	p[0] = LPC_IAP_PREPARE;
 	p[1] = page;
 	p[2] = last;
-	romcall(p,p);
-	if (p[0]) {
+	romcall(p,r);
+	if (r[0]) {
 		return ERR_FAIL;
 	}
 
@@ -47,15 +51,16 @@ int flash_agent_erase(u32 flash_addr, u32 length) {
 	p[1] = page;
 	p[2] = last;
 	p[3] = 0x2ee0;
-	romcall(p,p);
-	if (p[0]) {
+	romcall(p,r);
+	if (r[0]) {
 		return ERR_FAIL;
 	}
 	return ERR_NONE;
 }
 
 int flash_agent_write(u32 flash_addr, const void *data, u32 length) {
-	u32 p[5];
+	void (*romcall)(u32 *,u32 *) = (void*) LPC_IAP_FUNC;
+	u32 p[5],r[4];
 	u32 page = flash_addr >> 12;
 	if (flash_addr & 0xFFF) {
 		return ERR_ALIGNMENT;
@@ -64,18 +69,25 @@ int flash_agent_write(u32 flash_addr, const void *data, u32 length) {
 	p[0] = LPC_IAP_PREPARE;
 	p[1] = page;
 	p[2] = page;
-	romcall(p,p);
-	if (p[0]) {
+	romcall(p,r);
+	if (r[0]) {
 		return ERR_FAIL;
 	}
 
+	// todo: smaller writes, etc
+	if (length != 4096) {
+		int n;
+		for (n = length; n < 4096; n++) {
+			((char*) data)[n] = 0;
+		}
+	}
 	p[0] = LPC_IAP_WRITE;
 	p[1] = flash_addr;
 	p[2] = (u32) data;
 	p[3] = 0x1000;
 	p[4] = 0x2ee0;
-	romcall(p,p);
-	if (p[0]) {
+	romcall(p,r);
+	if (r[0]) {
 		return ERR_FAIL;
 	}
 
