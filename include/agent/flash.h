@@ -39,14 +39,14 @@ typedef struct flash_agent {
 	u32 reserved3;
 
 	int (*setup)(struct flash_agent *agent);
-	int (*erase)(void *flash, u32 size);
-	int (*write)(void *flash, void *data, u32 size);
+	int (*erase)(u32 flash_addr, u32 length);
+	int (*write)(u32 flash_addr, const void *data, u32 length);
 	int (*ioctl)(u32 op, void *ptr, u32 arg0, u32 arg1);
 } flash_agent;
 
 int flash_agent_setup(flash_agent *agent);
-int flash_agent_erase(void *flash, u32 size);
-int flash_agent_write(void *flash, void *data, u32 size);
+int flash_agent_erase(u32 flash_addr, u32 length);
+int flash_agent_write(u32 flash_addr, const void *data, u32 length);
 int flash_agent_ioctl(u32 op, void *ptr, u32 arg0, u32 arg1);
 
 #define ERR_NONE	0
