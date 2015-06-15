@@ -386,6 +386,14 @@ int do_reset(int argc, param *argv) {
 	return 0;
 }
 
+int do_reset_hw(int argc, param *argv) {
+	swdp_target_reset(1);
+	usleep(10000);
+	swdp_target_reset(0);
+	usleep(10000);
+	return 0;
+}
+
 int do_reset_stop(int argc, param *argv) {
 	swdp_core_halt();
 	swdp_ahb_write(CDBG_EMCR, 1);
@@ -688,6 +696,7 @@ struct debugger_command debugger_commands[] = {
 	{ "erase",	"", do_erase,	"erase flash" },
 	{ "reset",	"", do_reset,	"reset target" },
 	{ "reset-stop",	"", do_reset_stop, "reset target and halt cpu" },
+	{ "reset-hw",	"", do_reset_hw, "strobe /RESET pin" },
 	{ "watch-pc",	"", do_watch_pc, "set watchpoint at addr" },
 	{ "watch-rw",	"", do_watch_rw, "set watchpoint at addr" },
 	{ "print",	"", do_print,	"print numeric arguments" },
