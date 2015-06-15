@@ -456,6 +456,8 @@ int do_help(int argc, param *argv) {
 	return 0;
 }
 
+void *get_builtin_file(const char *fn, size_t *sz);
+
 void *load_file(const char *fn, size_t *_sz) {
 	int fd;
 	off_t sz;
@@ -473,6 +475,35 @@ fail:
 	if (data) free(data);
 	if (fd >= 0) close(fd);
 	return NULL;
+}
+
+void *load_agent(const char *arch, size_t *_sz) {
+	void *data;
+	size_t sz;
+	char name[256];
+	if (arch == NULL) return NULL;
+	snprintf(name, 256, "agent-%s.bin", arch);
+	if ((data = get_builtin_file(name, &sz))) {
+		void *copy = malloc(sz + 4);
+		if (copy == NULL) return NULL;
+		memcpy(copy, data, sz);
+		*_sz = sz;
+		return copy;
+	}
+	snprintf(name, sizeof(name), "out/agent-%s.bin", arch);
+	return load_file(name, _sz);
+}
+
+static char *agent_arch = NULL;
+
+int do_setarch(int argc, param *argv) {
+	char *x;
+	if (argc != 1) return -1;
+	if((x = strdup(argv[0].s))) {
+		free(agent_arch);
+		agent_arch = x;
+	}
+	return 0;
 }
 
 int invoke(u32 agent, u32 func, u32 r0, u32 r1, u32 r2, u32 r3) {
@@ -509,8 +540,10 @@ int run_flash_agent(u32 flashaddr, void *data, size_t data_sz) {
 	flash_agent *agent = NULL;
 	size_t agent_sz;
 
-	if ((agent = load_file("out/agent-lpc15xx.bin", &agent_sz)) == NULL) {
-		xprintf("error: cannot load flash agent\n");
+	if ((agent = load_agent(agent_arch, &agent_sz)) == NULL) {
+		xprintf("error: cannot load flash agent for architecture '%s'\n",
+			agent_arch ? agent_arch : "unknown");
+		xprintf("error: set architecture with: arch <name>\n");
 		goto fail;
 	}
 	// sanity check
@@ -661,6 +694,7 @@ struct debugger_command debugger_commands[] = {
 	{ "echo",	"", do_echo, "echo command line" },
 	{ "bootloader", "", do_bootloader, "reboot into bootloader" },
 	{ "setclock",	"", do_setclock, "set clock rate (khz)" },
+	{ "arch",	"", do_setarch, "set architecture for flash agent" },
 	{ "text",	"", do_text, "dump text" },
 	{ "help",	"", do_help, "help" },
 	{ 0, 0, 0, 0 },
