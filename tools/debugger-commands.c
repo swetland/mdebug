@@ -523,6 +523,12 @@ int invoke(u32 agent, u32 func, u32 r0, u32 r1, u32 r2, u32 r3) {
 	swdp_core_write(14, agent | 1); // include T bit
 	swdp_core_write(15, func | 1); // include T bit
 
+	// if the target has bogus data at 0, the processor may be in
+	// pending-exception state after reset-stop, so we will clear
+	// any exceptions and then set the PSR to something reasonable
+	swdp_ahb_write(0xe000ed0c, 0x05fa0002);
+	swdp_core_write(16, 0x01000000);
+
 	// todo: readback and verify?
 
 	xprintf("invoke <func@%08x>(0x%x,0x%x,0x%x,0x%x)\n", func, r0, r1, r2, r3);
