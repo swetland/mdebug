@@ -43,6 +43,7 @@ UNAME_M := $(shell uname -m)
 
 HOST_CFLAGS := -g -O1 -Wall
 HOST_CFLAGS += -Itools -Iinclude
+HOST_CFLAGS += -DLINENOISE_INTERRUPTIBLE
 
 ifeq ($(UNAME),Darwin)
 HOST_CFLAGS += -I/opt/local/include -L/opt/local/lib
@@ -50,7 +51,7 @@ HOST_LIBS += -lusb-1.0
 endif
 ifeq ($(UNAME),Linux)
 HOST_CFLAGS += -DWITH_THUMB2_DISASSEMBLE=1
-HOST_LIBS += -lusb-1.0
+HOST_LIBS += -lusb-1.0 -lpthread -lrt
 endif
 
 OUT := out
