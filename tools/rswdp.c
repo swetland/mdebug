@@ -37,6 +37,8 @@ static u16 sequence = 1;
 
 static usb_handle *usb;
 
+static int swd_error = 0;
+
 #define MAXWORDS 512
 
 struct txn {
@@ -110,7 +112,15 @@ static int process_reply(struct txn *t, u32 *data, int count) {
 			}
 			continue;
 		case CMD_STATUS:
-			return op ? -op : 0;
+			if (op) {
+				if (swd_error == 0) {
+					swd_error = -op;
+					fprintf(stderr, "SWD ERROR\n");
+				}
+				return -op;
+			} else {
+				return 0;
+			}
 		default:
 			fprintf(stderr,"unknown command 0x%02x\n", RSWD_MSG_CMD(msg));
 			return -1;
@@ -505,6 +515,7 @@ int swdp_reset(void) {
 	struct txn t;
 	u32 n, idcode;
 
+	swd_error = 0;
 	q_init(&t);
 	t.tx[t.txc++] = RSWD_MSG(CMD_ATTACH, 0, 0);
 	t.tx[t.txc++] = SWD_RD(DP_IDCODE, 1);
@@ -513,6 +524,7 @@ int swdp_reset(void) {
 
 	fprintf(stderr,"IDCODE: %08x\n", idcode);
 
+	swd_error = 0;
 	q_init(&t);
  	/* clear any stale errors */
 	t.tx[t.txc++] = SWD_WR(DP_ABORT, 1);
@@ -533,6 +545,22 @@ int swdp_reset(void) {
 
 	fprintf(stderr,"DPCTRL: %08x\n", n);
 	return 0;
+}
+
+int swdp_clear_error(void) {
+	if (swd_error == 0) {
+		return 0;
+	} else {
+		struct txn t;
+		swd_error = 0;
+
+		q_init(&t);
+		t.tx[t.txc++] = SWD_WR(DP_ABORT, 1);
+		t.tx[t.txc++] = 0x1E;
+		q_exec(&t);
+
+		return swd_error;
+	}
 }
 
 void swdp_enable_tracing(int yes) {

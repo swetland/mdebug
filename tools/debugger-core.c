@@ -67,6 +67,7 @@ static void m_event(const char *evt) {
 
 static void monitor(void) {
 	u32 v;
+	if (swdp_clear_error()) return;
 	if (swdp_ahb_read(DFSR, &v) == 0) {
 		if (v & DFSR_MASK) {
 			swdp_ahb_write(DFSR, DFSR_MASK);
@@ -84,6 +85,10 @@ static pthread_t _dbg_thread;
 
 void debugger_lock() {
 	pthread_mutex_lock(&_dbg_lock);
+	if (swdp_clear_error()) {
+		xprintf("SWD ERROR persists. Attempting link reset.\n");
+		swdp_reset();
+	}
 }
 
 void debugger_unlock() {
@@ -105,9 +110,13 @@ void debugger_init() {
 
 #else
 
-void debugger_lock() { }
-void debugger_unlock() { }
-void debugger_init() { }
+void debugger_lock() {
+	swdp_clear_error();
+}
+void debugger_unlock() {
+}
+void debugger_init() {
+}
 
 #endif
 
