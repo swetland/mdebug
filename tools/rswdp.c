@@ -39,6 +39,10 @@ static usb_handle *usb;
 
 static int swd_error = 0;
 
+int swdp_error(void) {
+	return swd_error;
+}
+
 #define MAXWORDS 512
 
 struct txn {
@@ -113,10 +117,7 @@ static int process_reply(struct txn *t, u32 *data, int count) {
 			continue;
 		case CMD_STATUS:
 			if (op) {
-				if (swd_error == 0) {
-					swd_error = -op;
-					fprintf(stderr, "SWD ERROR\n");
-				}
+				swd_error = -op;
 				return -op;
 			} else {
 				return 0;

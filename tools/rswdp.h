@@ -49,6 +49,7 @@ int swdp_watchpoint_rw(unsigned n, u32 addr);
 /* attempt to clear any error state from previous transactions */
 /* return 0 if successful (or no error state existed) */
 int swdp_clear_error(void);
+int swdp_error(void);
 
 int swdp_reset(void);
 

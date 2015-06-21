@@ -92,14 +92,17 @@ void debugger_lock() {
 }
 
 void debugger_unlock() {
+	if (swdp_error()) {
+		xprintf("SWD ERROR\n");
+	}
 	pthread_mutex_unlock(&_dbg_lock);
 }
 
 void *debugger_monitor(void *arg) {
 	for (;;) {
-		debugger_lock();
+		pthread_mutex_lock(&_dbg_lock);
 		monitor();
-		debugger_unlock();
+		pthread_mutex_unlock(&_dbg_lock);
 		usleep(250000);
 	}
 }
