@@ -29,6 +29,11 @@
 #include "debugger.h"
 #include "linenoise.h"
 
+// useful gdb stuff
+// set debug remote 1               protocol tracing
+// set debug arch 1                 architecture tracing
+// maint print registers-remote     check on register map
+
 void zprintf(const char *fmt, ...) {
 	linenoisePause();
 	va_list ap;
@@ -191,7 +196,35 @@ void xprintf(const char *fmt, ...) {
 }
 #endif
 
+static const char *target_xml =
+"<?xml version=\"1.0\"?>"
+"<target>"
+"<architecture>arm</architecture>"
+"<feature name=\"org.gnu.gdb.arm.m-profile\">"
+"<reg name=\"r0\" bitsize=\"32\"/>"
+"<reg name=\"r1\" bitsize=\"32\"/>"
+"<reg name=\"r2\" bitsize=\"32\"/>"
+"<reg name=\"r3\" bitsize=\"32\"/>"
+"<reg name=\"r4\" bitsize=\"32\"/>"
+"<reg name=\"r5\" bitsize=\"32\"/>"
+"<reg name=\"r6\" bitsize=\"32\"/>"
+"<reg name=\"r7\" bitsize=\"32\"/>"
+"<reg name=\"r8\" bitsize=\"32\"/>"
+"<reg name=\"r9\" bitsize=\"32\"/>"
+"<reg name=\"r10\" bitsize=\"32\"/>"
+"<reg name=\"r11\" bitsize=\"32\"/>"
+"<reg name=\"r12\" bitsize=\"32\"/>"
+"<reg name=\"sp\" bitsize=\"32\" type=\"data_ptr\"/>"
+"<reg name=\"lr\" bitsize=\"32\"/>"
+"<reg name=\"pc\" bitsize=\"32\" type=\"code_ptr\"/>"
+"<reg name=\"xpsr\" bitsize=\"32\"/>"
+"<reg name=\"msp\" bitsize=\"32\" type=\"data_ptr\"/>"
+"<reg name=\"psp\" bitsize=\"32\" type=\"data_ptr\"/>"
+"</feature>"
+"</target>";
+
 void handle_ext_command(struct gdbcnxn *gc, char *cmd, char *args) {
+	zprintf("EXT: <%s> <%s>\n", cmd, args);
 	if (!strcmp(cmd,"Rcmd")) {
 		char *p = args;
 		cmd = p;
@@ -202,6 +235,17 @@ void handle_ext_command(struct gdbcnxn *gc, char *cmd, char *args) {
 		*cmd = 0;
 		GC = gc;
 		debugger_command(args);
+	} else if(!strcmp(cmd, "Supported")) {
+		gdb_puts(gc,
+			"qXfer:features:read+"
+			";PacketSize=800"
+			);
+	} else if(!strcmp(cmd, "Xfer")) {
+		if (!strncmp(args, "features:read:target.xml:", 25)) {
+			gdb_puts(gc,"l");
+			// todo: support binary format w/ escaping
+			gdb_puts(gc, target_xml);
+		}
 	}
 }
 
@@ -245,6 +289,12 @@ void handle_command(struct gdbcnxn *gc, char *cmd) {
 		gdb_puthex(gc, regs, sizeof(regs));
 		break;
 	}
+	case 'p': {
+		u32 v;
+		swdp_core_read(strtoul(cmd + 1, NULL, 16), &v);
+		gdb_puthex(gc, &v, sizeof(v));
+		break;
+	}
 	case 's':
 		swdp_core_step();
 		gdb_puts(gc, "S00");
@@ -252,7 +302,7 @@ void handle_command(struct gdbcnxn *gc, char *cmd) {
 	case 'q': {
 		char *args = ++cmd;
 		while (*args) {
-			if (*args == ',') {
+			if ((*args == ':') || (*args == ',')) {
 				*args++ = 0;
 				break;
 			}
