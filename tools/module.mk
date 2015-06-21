@@ -7,6 +7,8 @@ M_OBJS += tools/debugger-commands.o
 M_OBJS += tools/rswdp.o
 M_OBJS += tools/linenoise.o
 M_OBJS += tools/usb.o
+M_OBJS += tools/socket.o
+M_OBJS += tools/gdb-bridge.o
 M_OBJS += out/debugger-builtins.o
 $(call build-host-executable)
 
@@ -14,16 +16,6 @@ AGENTS := out/agent-lpc13xx.bin out/agent-lpc15xx.bin out/agent-stm32f4xx.bin
 out/debugger-builtins.c: $(AGENTS) bin/mkbuiltins
 	@mkdir -p out
 	./bin/mkbuiltins $(AGENTS) > $@	
-
-M_NAME := gdb-bridge
-M_OBJS := tools/gdb-bridge.o
-M_OBJS += tools/debugger-core.o
-M_OBJS += tools/debugger-commands.o
-M_OBJS += tools/rswdp.o
-M_OBJS += tools/linenoise.o
-M_OBJS += tools/usb.o
-M_OBJS += out/debugger-builtins.o
-$(call build-host-executable)
 
 M_NAME := stm32boot
 M_OBJS := tools/stm32boot.o

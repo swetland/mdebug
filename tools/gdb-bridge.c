@@ -26,6 +26,17 @@
 #include <fw/types.h>
 #include "rswdp.h"
 #include <protocol/rswdp.h>
+#include "debugger.h"
+#include "linenoise.h"
+
+void zprintf(const char *fmt, ...) {
+	linenoisePause();
+	va_list ap;
+	va_start(ap, fmt);
+	vfprintf(stderr, fmt, ap);
+	va_end(ap);
+	linenoiseResume();
+}
 
 struct gdbcnxn {
 	int tx, rx;
@@ -120,7 +131,7 @@ again:
 			return 0;
 		}
 		if (c < 0x20)
-			fprintf(stderr,"! %02x !\n",c);
+			zprintf("PKT: ?? %02x\n",c);
 	} while (c != '$');
 
 	chk = 0;
@@ -137,7 +148,7 @@ again:
 			c = strtoul(tmp, 0, 16);
 			if (c != (chk & 0xff)) {
 				gdb_putc(gc,'-');
-				fprintf(stderr,"PKT: BAD CHECKSUM\n");
+				zprintf("PKT: BAD CHECKSUM\n");
 				goto again;
 			} else {
 				gdb_putc(gc,'+');
@@ -149,7 +160,7 @@ again:
 		}
 	}
 	gdb_putc(gc,'-');
-	fprintf(stderr,"PKT: OVERFLOW\n");
+	zprintf("PKT: OVERFLOW\n");
 	goto again;
 
 fail:
@@ -168,6 +179,7 @@ unsigned unhex(char *x) {
 
 static struct gdbcnxn *GC;
 
+#if 0
 void xprintf(const char *fmt, ...) {
 	char buf[256];
 	va_list ap;
@@ -177,11 +189,9 @@ void xprintf(const char *fmt, ...) {
 	va_end(ap);
 	gdb_puthex(GC, buf, strlen(buf));
 }
+#endif
 
-void debugger_command(char *line);
-
-void handle_ext_command(struct gdbcnxn *gc, char *cmd, char *args)
-{
+void handle_ext_command(struct gdbcnxn *gc, char *cmd, char *args) {
 	if (!strcmp(cmd,"Rcmd")) {
 		char *p = args;
 		cmd = p;
@@ -195,8 +205,7 @@ void handle_ext_command(struct gdbcnxn *gc, char *cmd, char *args)
 	}
 }
 
-void handle_command(struct gdbcnxn *gc, char *cmd)
-{
+void handle_command(struct gdbcnxn *gc, char *cmd) {
 	union {
 		u32 w[256+2];
 		u16 h[512+4];
@@ -253,6 +262,8 @@ void handle_command(struct gdbcnxn *gc, char *cmd)
 		break;
 		
 	}
+	default:
+		zprintf("CMD: %c unknown\n", cmd[0]);
 	}
 	gdb_epilogue(gc);
 }
@@ -260,27 +271,17 @@ void handle_command(struct gdbcnxn *gc, char *cmd)
 void handler(int n) {
 }
 
-int main(int argc, char **argv) {
+void gdb_server(int fd) {
 	struct gdbcnxn gc;
 	char cmd[32768];
-	gc.tx = 1;
-	gc.rx = 0;
+	gc.tx = fd;
+	gc.rx = fd;
 	gc.chk = 0;
 
-	signal(SIGINT, handler);
-	
-	fprintf(stderr,"[ debugport v1.0 ]\n");
-
-	if (swdp_open())
-		fprintf(stderr,"error: cannot find swdp board\n");
-
-	for (;;) {
-		if (gdb_recv(&gc, cmd, sizeof(cmd))) {
-			fprintf(stderr,"[ disconnect ]\n");
-			return 0;
-		}
-		//fprintf(stderr,"PKT: %s\n", cmd);
+	while (gdb_recv(&gc, cmd, sizeof(cmd)) == 0) {
+		zprintf("PKT: %s\n", cmd);
+		debugger_lock();
 		handle_command(&gc, cmd);
+		debugger_unlock();
 	}
-	return 0;
 }

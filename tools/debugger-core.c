@@ -23,16 +23,13 @@
 #include <ctype.h>
 #include <stdarg.h>
 
-#include <fw/types.h>
-#include "debugger.h"
-
 #include <pthread.h>
+#include <sys/socket.h>
 
-#include "rswdp.h"
-
-// for core debug regs
+#include <fw/types.h>
 #include <protocol/rswdp.h>
-
+#include "debugger.h"
+#include "rswdp.h"
 #include "linenoise.h"
 
 #define DHCSR_C_DEBUGEN		(1 << 0)
@@ -54,10 +51,6 @@
 #define DFSR_VCATCH		(1 << 3)
 #define DFSR_EXTERNAL		(1 << 4)
 #define DFSR_MASK		0x1F
-
-#define DEBUG_MONITOR 1
-
-#if DEBUG_MONITOR
 
 static void m_event(const char *evt) {
 	linenoisePause();
@@ -107,21 +100,38 @@ void *debugger_monitor(void *arg) {
 	}
 }
 
+void gdb_server(int fd);
+int socket_listen_tcp(unsigned port);
+
+static pthread_t _listen_master;
+void *gdb_listener(void *arg) {
+	int fd;
+	if ((fd = socket_listen_tcp(5555)) < 0) {
+		linenoisePause();
+		xprintf("gdb_listener() cannot bind to 5555\n");
+		linenoiseResume();
+		return NULL;
+	}
+	for (;;) {
+		int s = accept(fd, NULL, NULL);
+		if (s >= 0) {
+			linenoisePause();
+			xprintf("[ gdb connected ]\n");
+			linenoiseResume();
+			gdb_server(s);
+			close(s);
+			linenoisePause();
+			xprintf("[ gdb disconnected ]\n");
+			linenoiseResume();
+		}
+	}
+	return NULL;
+}
+
 void debugger_init() {
 	pthread_create(&_dbg_thread, NULL, debugger_monitor, NULL);
+	pthread_create(&_listen_master, NULL, gdb_listener, NULL);
 }
-
-#else
-
-void debugger_lock() {
-	swdp_clear_error();
-}
-void debugger_unlock() {
-}
-void debugger_init() {
-}
-
-#endif
 
 
 static struct varinfo *all_variables = 0;
