@@ -58,6 +58,11 @@ int debugger_command(char *line);
 int debugger_invoke(const char *cmd, unsigned argc, ...);
 int debugger_variable(const char *name, u32 *value);
 
+/* lock to protect underlying rswdp state */
+void debugger_init();
+void debugger_lock();
+void debugger_unlock();
+
 /* provided by debugger-commands.c */
 extern struct debugger_command debugger_commands[];
 int read_register(const char *name, u32 *value);

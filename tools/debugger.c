@@ -24,10 +24,13 @@
 #include <fcntl.h>
 #include <getopt.h>
 
-#include "linenoise.h"
-
 #include <fw/types.h>
 #include "rswdp.h"
+
+#include "linenoise.h"
+#include "debugger.h"
+
+void linenoiseInit(void);
 
 static const char *scriptfile = NULL;
 
@@ -37,8 +40,6 @@ void xprintf(const char *fmt, ...) {
 	vprintf(fmt, ap);
 	va_end(ap);
 }
-
-void debugger_command(char *line);
 
 static void handler(int n) {
 	swdp_interrupt();
@@ -107,6 +108,9 @@ int main(int argc, char **argv) {
 
 		free(buf);
 	}
+
+	linenoiseInit();
+	debugger_init();
 
 	while ((line = linenoise("debugger> ")) != NULL) {
 		if (line[0] == 0) {

@@ -117,8 +117,6 @@ int do_stop(int argc, param *argv) {
 
 int do_resume(int argc, param *argv) {
 	swdp_core_resume();
-	if (swdp_core_wait_for_halt() == 0)
-		do_regs(0, 0);
 	return 0;
 }
 
@@ -581,7 +579,8 @@ int run_flash_agent(u32 flashaddr, void *data, size_t data_sz) {
 		if (swdp_watchpoint_rw(0, 0)) {
 			goto fail;
 		}
-		do_resume(0,0);
+		swdp_core_resume();
+		swdp_core_wait_for_halt();
 		// todo: timeout?
 		// todo: confirm halted
 	}

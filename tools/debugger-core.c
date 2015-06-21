@@ -26,6 +26,92 @@
 #include <fw/types.h>
 #include "debugger.h"
 
+#include <pthread.h>
+
+#include "rswdp.h"
+
+// for core debug regs
+#include <protocol/rswdp.h>
+
+#include "linenoise.h"
+
+#define DHCSR_C_DEBUGEN		(1 << 0)
+#define DHCSR_C_HALT		(1 << 1)
+#define DHCSR_C_STEP		(1 << 2)
+#define DHCSR_C_MASKINTS	(1 << 3)
+#define DHCSR_C_SNAPSTALL	(1 << 5)
+#define DHCSR_S_REGRDY		(1 << 16)
+#define DHCSR_S_HALT		(1 << 17)
+#define DHCSR_S_SLEEP		(1 << 18)
+#define DHCSR_S_LOCKUP		(1 << 19)
+#define DHCSR_S_RETIRE_ST	(1 << 24)
+#define DHCSR_S_RESET_ST	(1 << 25)
+
+#define DFSR			0xE000ED30
+#define DFSR_HALTED		(1 << 0)
+#define DFSR_BKPT		(1 << 1)
+#define DFSR_DWTTRAP		(1 << 2)
+#define DFSR_VCATCH		(1 << 3)
+#define DFSR_EXTERNAL		(1 << 4)
+#define DFSR_MASK		0x1F
+
+#define DEBUG_MONITOR 1
+
+#if DEBUG_MONITOR
+
+static void m_event(const char *evt) {
+	linenoisePause();
+	fprintf(stdout, "DEBUG EVENT: %s\n", evt);
+	linenoiseResume();
+}
+
+static void monitor(void) {
+	u32 v;
+	if (swdp_ahb_read(DFSR, &v) == 0) {
+		if (v & DFSR_MASK) {
+			swdp_ahb_write(DFSR, DFSR_MASK);
+		}
+		if (v & DFSR_HALTED) m_event("HALTED");
+		if (v & DFSR_BKPT) m_event("BKPT");
+		if (v & DFSR_DWTTRAP) m_event("DWTTRAP");
+		if (v & DFSR_VCATCH) m_event("VCATCH");
+		if (v & DFSR_EXTERNAL) m_event("EXTERNAL");
+	}
+}
+
+static pthread_mutex_t _dbg_lock = PTHREAD_MUTEX_INITIALIZER;
+static pthread_t _dbg_thread;
+
+void debugger_lock() {
+	pthread_mutex_lock(&_dbg_lock);
+}
+
+void debugger_unlock() {
+	pthread_mutex_unlock(&_dbg_lock);
+}
+
+void *debugger_monitor(void *arg) {
+	for (;;) {
+		debugger_lock();
+		monitor();
+		debugger_unlock();
+		usleep(250000);
+	}
+}
+
+void debugger_init() {
+	pthread_create(&_dbg_thread, NULL, debugger_monitor, NULL);
+}
+
+#else
+
+void debugger_lock() { }
+void debugger_unlock() { }
+void debugger_init() { }
+
+#endif
+
+
 static struct varinfo *all_variables = 0;
 static struct funcinfo *allfuncs = 0;
 
@@ -313,7 +399,11 @@ static int _debugger_exec(const char *cmd, unsigned argc, param *argv) {
 
 	for (c = debugger_commands; c->name; c++) {
 		if (!strcasecmp(cmd, c->name)) {
-			return c->func(argc, argv);
+			int n;
+			debugger_lock();
+			n = c->func(argc, argv);
+			debugger_unlock();
+			return n;
 		}
 	}
 	for (f = allfuncs; f; f = f->next) {
