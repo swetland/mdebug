@@ -208,12 +208,27 @@ int gdb_recv(struct gdbcnxn *gc, unsigned char *ptr, int len) {
 }
 
 unsigned unhex(char *x) {
+	char tmp[3];
 	unsigned n;
-	char t = x[2];
-	x[2] = 0;
-	n = strtoul(x, 0, 16);
-	x[2] = t;
+	tmp[0] = x[0];
+	tmp[1] = x[1];
+	tmp[2] = 0;
+	n = strtoul(tmp, 0, 16);
  	return n;
+}
+
+int hextobin(void *_dst, char *src, int max) {
+	unsigned char *dst = _dst;
+	while (max > 0) {
+		if (src[0] && src[1]) {
+			*dst++ = unhex(src);
+			src += 2;
+			max -= 2;
+		} else {
+			break;
+		}
+	}
+	return dst - ((unsigned char*) _dst);
 }
 
 static const char *target_xml =
@@ -318,34 +333,87 @@ void handle_command(struct gdbcnxn *gc, unsigned char *cmd) {
 		swdp_core_halt();
 		break;
 	case 'H':
+		/* select thread - we've only got one */
 		gdb_puts(gc, "OK");
 		break;
+	// m hexaddr , hexcount
+	// read from memory
 	case 'm':
-		if (sscanf((char*) cmd + 1, "%x,%x", &x, &n) != 2)
+		if (sscanf((char*) cmd + 1, "%x,%x", &x, &n) != 2) {
 			break;
-
-		if (n > 1024)
+		}
+		if (n > 1024) {
 			n = 1024;
-		 
+		}
 		swdp_ahb_read32(x & (~3), tmp.w, ((n + 3) & (~3)) / 4);
 		gdb_puthex(gc, tmp.b + (x & 3), n);
-		break;	
+		break;
+	// M hexaddr , hexcount : hexbytes
+	// write to memory
+	case 'M': {
+		char *data = strchr((char*) cmd + 1, ':');
+		int len;
+		if (!data) {
+			break;
+		}
+		*data++ = 0;
+		if (sscanf((char*) cmd + 1, "%x,%x", &x, &n) != 2) {
+			break;
+		}
+		len = hextobin(gc->rxbuf, data, MAXPKT);
+		zprintf("write %d bytes at %x (%d recv)\n", n, x, len);
+		gdb_puts(gc, "EFF"); //Eerrno or OK
+		break;
+		}
+	// g
+	// read registers 0...
 	case 'g':  {
 		u32 regs[19];
 		swdp_core_read_all(regs);
 		gdb_puthex(gc, regs, sizeof(regs));
 		break;
 	}
+	// G hexbytes
+	// write registers 0...
+	case 'G': {
+		int len = hextobin(gc->rxbuf, (char*) cmd + 1, MAXPKT);
+		for (n = 0; n < len / 4; n++) {
+			memcpy(&x, gc->rxbuf + (n * 4), sizeof(x));
+			swdp_core_write(n, x);
+		}
+		gdb_puts(gc, "OK");
+		break;
+	}
+	// p reghex
+	// read from register
 	case 'p': {
 		u32 v;
 		swdp_core_read(strtoul((char*) cmd + 1, NULL, 16), &v);
 		gdb_puthex(gc, &v, sizeof(v));
 		break;
 	}
+	// P reghex = hexbytes
+	// write to register
+	case 'P': {
+		int len;
+		char *data = strchr((char*) cmd + 1, '=');
+		if (data) {
+			*data++ = 0;
+			n = strtoul((char*) cmd + 1, NULL, 16);
+			len = hextobin(gc->rxbuf, data, MAXPKT);
+			if (len != 4) break;
+			memcpy(&x, gc->rxbuf, sizeof(x));
+			swdp_core_write(n, x);
+			gdb_puts(gc, "OK");
+		}
+		break;
+	}
+	// single step
 	case 's':
 		swdp_core_step();
 		gdb_puts(gc, "S00");
 		break;
+	// extended query and set commands
 	case 'q': 
 	case 'Q': {
 		char *args = (char*) (cmd + 1);
