@@ -775,14 +775,14 @@ ssize_t linenoiseRead(struct linenoiseState *l, void *ptr, int len) {
         fds[0].fd = l->ifd;
         fds[0].events = POLLIN;
         fds[0].revents = 0;
+        fds[1].revents = 0;
         if (linenoise_pipefds[0] < 0) {
-            nfds = 2;
+            nfds = 1;
+        } else {
             fds[1].fd = linenoise_pipefds[0];
             fds[1].events = POLLIN;
-        } else {
-            nfds = 1;
+            nfds = 2;
         }
-        fds[1].revents = 0;
 
         /* wait for input or refresh request */
         pthread_mutex_unlock(&linenoise_lock);
