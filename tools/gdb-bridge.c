@@ -311,6 +311,46 @@ static void handle_set(struct gdbcnxn *gc, char *cmd, char *args) {
 	}
 }
 
+// Since we're only guaranteed 32bit reads and writes by the MEM-AP
+// convert non-aligned writes into a read-modify-write followed by
+// an aligned multiword write, followed by a read-modify-write.
+// (as necessary)
+void write_memory(u32 addr, unsigned char *data, int len) {
+	u32 x;
+
+	if (len < 1) {
+		return;
+	}
+
+	if (addr & 3) {
+		int offset = (addr & 3);
+		int count = 4 - offset;
+		if (count > len) {
+			count = len;
+		}
+		swdp_ahb_read(addr & (~3), &x);
+		memcpy(((char*) &x) + offset, data, count);
+		swdp_ahb_write(addr & (~3), x);
+		len -= count;
+		data += count;
+		addr += count;
+	}
+
+	if (len > 3) {
+		int count = (4 * (len / 4));
+		swdp_ahb_write32(addr, (void*) data, len / 4);
+		len -= count;
+		data += count;
+		addr += count;
+	}
+
+	if (len > 0) {
+		swdp_ahb_read(addr, &x);
+		memcpy(&x, data, len);
+		swdp_ahb_write(addr, x);
+	}
+}
+
 void handle_command(struct gdbcnxn *gc, unsigned char *cmd) {
 	union {
 		u32 w[256+2];
@@ -361,8 +401,8 @@ void handle_command(struct gdbcnxn *gc, unsigned char *cmd) {
 			break;
 		}
 		len = hextobin(gc->rxbuf, data, MAXPKT);
-		zprintf("write %d bytes at %x (%d recv)\n", n, x, len);
-		gdb_puts(gc, "EFF"); //Eerrno or OK
+		write_memory(x, gc->rxbuf, len);
+		gdb_puts(gc, "OK");
 		break;
 		}
 	// g
@@ -446,7 +486,7 @@ void gdb_server(int fd) {
 
 	gdb_init(&gc, fd);
 
-	gc.flags |= F_TRACE;
+//	gc.flags |= F_TRACE;
 
 	for (;;) {
 		r = read(fd, iobuf, sizeof(iobuf));
