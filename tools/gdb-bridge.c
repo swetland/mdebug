@@ -243,10 +243,7 @@ static const char *target_xml =
 "</feature>"
 "</target>";
 
-void handle_ext_command(struct gdbcnxn *gc, char *cmd, char *args) {
-	if (gc->flags & F_TRACE) {
-		zprintf("EXT: <%s> <%s>\n", cmd, args);
-	}
+static void handle_query(struct gdbcnxn *gc, char *cmd, char *args) {
 	if (!strcmp(cmd,"Rcmd")) {
 		char *p = args;
 		cmd = p;
@@ -259,6 +256,7 @@ void handle_ext_command(struct gdbcnxn *gc, char *cmd, char *args) {
 	} else if(!strcmp(cmd, "Supported")) {
 		gdb_puts(gc,
 			"qXfer:features:read+"
+			";QStartNoAckMode+"
 			";PacketSize=2000"
 			);
 	} else if(!strcmp(cmd, "Xfer")) {
@@ -268,7 +266,16 @@ void handle_ext_command(struct gdbcnxn *gc, char *cmd, char *args) {
 			gdb_puts(gc, target_xml);
 		}
 	} else {
-		zprintf("GDB: unknown command: q%s:%s\n", cmd, args);
+		zprintf("GDB: unsupported: q%s:%s\n", cmd, args);
+	}
+}
+
+static void handle_set(struct gdbcnxn *gc, char *cmd, char *args) {
+	if(!strcmp(cmd, "StartNoAckMode")) {
+		gc->flags &= ~F_ACK;
+		gdb_puts(gc, "OK");
+	} else {
+		zprintf("GDB: unsupported: Q%s:%s\n", cmd, args);
 	}
 }
 
@@ -322,8 +329,9 @@ void handle_command(struct gdbcnxn *gc, unsigned char *cmd) {
 		swdp_core_step();
 		gdb_puts(gc, "S00");
 		break;
-	case 'q': {
-		char *args = (char*) ++cmd;
+	case 'q': 
+	case 'Q': {
+		char *args = (char*) (cmd + 1);
 		while (*args) {
 			if ((*args == ':') || (*args == ',')) {
 				*args++ = 0;
@@ -331,7 +339,11 @@ void handle_command(struct gdbcnxn *gc, unsigned char *cmd) {
 			}
 			args++;
 		}
-		handle_ext_command(gc, (char*) cmd, args);
+		if (cmd[0] == 'q') {
+			handle_query(gc, (char*) (cmd + 1), args);
+		} else {
+			handle_set(gc, (char*) (cmd + 1), args);
+		}
 		break;
 		
 	}
@@ -348,6 +360,8 @@ void gdb_server(int fd) {
 	int r, len;
 
 	gdb_init(&gc, fd);
+
+	gc.flags |= F_TRACE;
 
 	for (;;) {
 		r = read(fd, iobuf, sizeof(iobuf));
