@@ -34,6 +34,28 @@
 // set debug arch 1                 architecture tracing
 // maint print registers-remote     check on register map
 
+#define MAXPKT	8192
+
+#define S_IDLE	0
+#define S_RECV	1
+#define S_CHK1	2
+#define S_CHK2	3
+
+#define F_ACK	1
+#define F_TRACE	2
+
+struct gdbcnxn {
+	int fd;
+	unsigned state;
+	unsigned sum;
+	unsigned flags;
+	unsigned char *txptr;	
+	unsigned char *rxptr;
+	unsigned char rxbuf[MAXPKT];
+	unsigned char txbuf[MAXPKT];
+	char chk[4];
+};
+
 void zprintf(const char *fmt, ...) {
 	linenoisePause();
 	va_list ap;
@@ -43,134 +65,146 @@ void zprintf(const char *fmt, ...) {
 	linenoiseResume();
 }
 
-struct gdbcnxn {
-	int tx, rx;
-	unsigned chk;
-};
-
-int gdb_getc(struct gdbcnxn *gc) {
-	int r;
-	unsigned char c;
-	for (;;) {
-		r = read(gc->rx, &c, 1);
-		if (r <= 0) {
-			if (errno == EINTR)
-				continue;
-			return -1;
-		}
-		return c;
-	}
+void gdb_init(struct gdbcnxn *gc, int fd) {
+	gc->fd = fd;
+	gc->state = S_IDLE;
+	gc->sum = 0;
+	gc->flags = F_ACK;
+	gc->txptr = gc->txbuf;
+	gc->rxptr = gc->rxbuf;
+	gc->chk[2] = 0;
 }
 
-int gdb_putc(struct gdbcnxn *gc, unsigned n) {
+static inline int rx_full(struct gdbcnxn *gc) {
+	return (gc->rxptr - gc->rxbuf) == (MAXPKT - 1);
+}
+
+static inline int tx_full(struct gdbcnxn *gc) {
+	return (gc->txptr - gc->txbuf) == (MAXPKT - 1);
+}
+
+static inline void gdb_putc(struct gdbcnxn *gc, unsigned n) {
 	unsigned char c = n;
-	int r;
-	gc->chk += c;
-	for (;;) {
-		r = write(gc->tx, &c, 1);
-		if (r <= 0) {
-			if (errno == EINTR)
-				continue;
-			return -1;
-		}
-		return 0;
+	if (!tx_full(gc)) {
+		gc->sum += c;
+		*(gc->txptr++) = c;
 	}
 }
-int gdb_puts(struct gdbcnxn *gc, const char *s) {
-	int r;
+
+void gdb_puts(struct gdbcnxn *gc, const char *s) {
 	while (*s) {
-		r = gdb_putc(gc, *s++);
-		if (r < 0) return r;
+		gdb_putc(gc, *s++);
 	}
-	return 0;
 }
-int gdb_prologue(struct gdbcnxn *gc) {
-	int n = gdb_putc(gc, '$');
-	gc->chk = 0;
-	return n;
+
+void gdb_prologue(struct gdbcnxn *gc) {
+	gc->txptr = gc->txbuf;
+	*(gc->txptr++) = '$';
+	gc->sum = 0;
 }
-int gdb_epilogue(struct gdbcnxn *gc) {
+
+void gdb_epilogue(struct gdbcnxn *gc) {
+	unsigned char *ptr;
+	int len, r;
 	char tmp[4];
-	sprintf(tmp,"#%02x", gc->chk & 0xff);
-	return gdb_puts(gc, tmp);
+	sprintf(tmp,"#%02x", gc->sum & 0xff);
+	gdb_puts(gc, tmp);
+
+	if (tx_full(gc)) {
+		zprintf("GDB: TX Packet Too Large\n");
+		return;
+	}
+
+	ptr = gc->txbuf;
+	len = gc->txptr - gc->txbuf;
+	while (len > 0) {
+		r = write(gc->fd, ptr, len);
+		if (r <= 0) {
+			if (errno == EINTR) continue;
+			zprintf("GDB: TX Write Error\n");
+			return;
+		}
+		ptr += r;
+		len -= r;
+	}
 }
 
 static char HEX[16] = "0123456789abcdef";
-int gdb_puthex(struct gdbcnxn *gc, void *ptr, unsigned len) {
+void gdb_puthex(struct gdbcnxn *gc, void *ptr, unsigned len) {
 	unsigned char *data = ptr;
-	unsigned n;
-	char buf[1025];
-
-	n = 0;
 	while (len-- > 0) {
 		unsigned c = *data++;
-		buf[n++] = HEX[c >> 4];
-		buf[n++] = HEX[c & 15];
-		if (n == 1024) {
-			buf[n] = 0;
-			if (gdb_puts(gc, buf))
-				return -1;
-			n = 0;
-		}
+		gdb_putc(gc, HEX[c >> 4]);
+		gdb_putc(gc, HEX[c & 15]);
 	}
-	if (n) {
-		buf[n] = 0;
-		return gdb_puts(gc, buf);
-	}
-	return 0;
 }
 
-int gdb_recv(struct gdbcnxn *gc, char *buf, int max) {
-	char *start = buf;
-	unsigned chk;
-	char tmp[3];
-	int c;
+void handle_command(struct gdbcnxn *gc, unsigned char *cmd);
 
-again:
-	do {
-		c = gdb_getc(gc);
-		if (c < 0) goto fail;
-		if (c == 3) {
-			buf[0] = 's';
-			buf[1] = 0;
-			return 0;
-		}
-		if (c < 0x20)
-			zprintf("PKT: ?? %02x\n",c);
-	} while (c != '$');
+void gdb_recv_cmd(struct gdbcnxn *gc) {
+	if (gc->flags & F_TRACE) {
+		zprintf("PKT: %s\n", gc->rxbuf);
+	}
+	debugger_lock();
+	handle_command(gc, gc->rxbuf);
+	debugger_unlock();
+}
 
-	chk = 0;
-	while (max > 1) {
-		c = gdb_getc(gc);
-		if (c == '#') {
-			*buf++ = 0;
-			c = gdb_getc(gc);
-			if (c < 0) goto fail;
-			tmp[0] = c;
-			c = gdb_getc(gc);
-			if (c < 0) goto fail;
-			tmp[1] = c;
-			c = strtoul(tmp, 0, 16);
-			if (c != (chk & 0xff)) {
-				gdb_putc(gc,'-');
-				zprintf("PKT: BAD CHECKSUM\n");
-				goto again;
-			} else {
-				gdb_putc(gc,'+');
-				return 0;
+int gdb_recv(struct gdbcnxn *gc, unsigned char *ptr, int len) {
+	unsigned char *start = ptr;
+	unsigned char c;
+
+	while (len > 0) {
+		c = *ptr++;
+		len--;
+		switch (gc->state) {
+		case S_IDLE:
+			if (c == 3) {
+				gc->rxbuf[0] = 's';
+				gc->rxbuf[1] = 0;
+				gdb_recv_cmd(gc);
+			} else if (c == '$') {
+				gc->state = S_RECV;
+				gc->sum = 0;
+				gc->rxptr = gc->rxbuf;
 			}
-		} else {
-			chk += c;
-			*buf++ = c;
+			break;
+		case S_RECV:
+			if (c == '#') {
+				gc->state = S_CHK1;
+			} else {
+				if (rx_full(gc)) {
+					zprintf("PKT: Too Large, Discarding.");
+					gc->rxptr = gc->rxbuf;
+					gc->state = S_IDLE;
+				} else {
+					*(gc->rxptr++) = c;
+					gc->sum += c;
+				}
+			}
+			break;
+		case S_CHK1:
+			gc->chk[0] = c;
+			gc->state = S_CHK2;
+			break;
+		case S_CHK2:
+			gc->chk[1] = c;
+			gc->state = S_IDLE;
+			*(gc->rxptr++) = 0;
+			if (strtoul(gc->chk, NULL, 16) == (gc->sum & 0xFF)) {
+				if (gc->flags & F_ACK) {
+					if (write(gc->fd, "+", 1)) ;
+				}
+				gdb_recv_cmd(gc);
+			} else {
+				if (gc->flags & F_ACK) {
+					if (write(gc->fd, "-", 1)) ;
+				}
+			}
+			break;
 		}
 	}
-	gdb_putc(gc,'-');
-	zprintf("PKT: OVERFLOW\n");
-	goto again;
-
-fail:
-	*start = 0;
-	return -1;
+	return ptr - start;
 }
 
 unsigned unhex(char *x) {
@@ -181,20 +215,6 @@ unsigned unhex(char *x) {
 	x[2] = t;
  	return n;
 }
-
-static struct gdbcnxn *GC;
-
-#if 0
-void xprintf(const char *fmt, ...) {
-	char buf[256];
-	va_list ap;
-	va_start(ap, fmt);
-	vsnprintf(buf, sizeof(buf), fmt, ap);
-	buf[sizeof(buf)-1] = 0;
-	va_end(ap);
-	gdb_puthex(GC, buf, strlen(buf));
-}
-#endif
 
 static const char *target_xml =
 "<?xml version=\"1.0\"?>"
@@ -224,7 +244,9 @@ static const char *target_xml =
 "</target>";
 
 void handle_ext_command(struct gdbcnxn *gc, char *cmd, char *args) {
-	zprintf("EXT: <%s> <%s>\n", cmd, args);
+	if (gc->flags & F_TRACE) {
+		zprintf("EXT: <%s> <%s>\n", cmd, args);
+	}
 	if (!strcmp(cmd,"Rcmd")) {
 		char *p = args;
 		cmd = p;
@@ -233,12 +255,11 @@ void handle_ext_command(struct gdbcnxn *gc, char *cmd, char *args) {
 			p+=2;
 		}
 		*cmd = 0;
-		GC = gc;
 		debugger_command(args);
 	} else if(!strcmp(cmd, "Supported")) {
 		gdb_puts(gc,
 			"qXfer:features:read+"
-			";PacketSize=800"
+			";PacketSize=2000"
 			);
 	} else if(!strcmp(cmd, "Xfer")) {
 		if (!strncmp(args, "features:read:target.xml:", 25)) {
@@ -246,10 +267,12 @@ void handle_ext_command(struct gdbcnxn *gc, char *cmd, char *args) {
 			// todo: support binary format w/ escaping
 			gdb_puts(gc, target_xml);
 		}
+	} else {
+		zprintf("GDB: unknown command: q%s:%s\n", cmd, args);
 	}
 }
 
-void handle_command(struct gdbcnxn *gc, char *cmd) {
+void handle_command(struct gdbcnxn *gc, unsigned char *cmd) {
 	union {
 		u32 w[256+2];
 		u16 h[512+4];
@@ -274,7 +297,7 @@ void handle_command(struct gdbcnxn *gc, char *cmd) {
 		gdb_puts(gc, "OK");
 		break;
 	case 'm':
-		if (sscanf(cmd + 1, "%x,%x", &x, &n) != 2)
+		if (sscanf((char*) cmd + 1, "%x,%x", &x, &n) != 2)
 			break;
 
 		if (n > 1024)
@@ -291,7 +314,7 @@ void handle_command(struct gdbcnxn *gc, char *cmd) {
 	}
 	case 'p': {
 		u32 v;
-		swdp_core_read(strtoul(cmd + 1, NULL, 16), &v);
+		swdp_core_read(strtoul((char*) cmd + 1, NULL, 16), &v);
 		gdb_puthex(gc, &v, sizeof(v));
 		break;
 	}
@@ -300,7 +323,7 @@ void handle_command(struct gdbcnxn *gc, char *cmd) {
 		gdb_puts(gc, "S00");
 		break;
 	case 'q': {
-		char *args = ++cmd;
+		char *args = (char*) ++cmd;
 		while (*args) {
 			if ((*args == ':') || (*args == ',')) {
 				*args++ = 0;
@@ -308,30 +331,36 @@ void handle_command(struct gdbcnxn *gc, char *cmd) {
 			}
 			args++;
 		}
-		handle_ext_command(gc, cmd, args);
+		handle_ext_command(gc, (char*) cmd, args);
 		break;
 		
 	}
 	default:
-		zprintf("CMD: %c unknown\n", cmd[0]);
+		zprintf("GDB: unknown command: %c\n", cmd[0]);
 	}
 	gdb_epilogue(gc);
 }
 
-void handler(int n) {
-}
-
 void gdb_server(int fd) {
 	struct gdbcnxn gc;
-	char cmd[32768];
-	gc.tx = fd;
-	gc.rx = fd;
-	gc.chk = 0;
+	unsigned char iobuf[32768];
+	unsigned char *ptr;
+	int r, len;
 
-	while (gdb_recv(&gc, cmd, sizeof(cmd)) == 0) {
-		zprintf("PKT: %s\n", cmd);
-		debugger_lock();
-		handle_command(&gc, cmd);
-		debugger_unlock();
+	gdb_init(&gc, fd);
+
+	for (;;) {
+		r = read(fd, iobuf, sizeof(iobuf));
+		if (r < 0) {
+			if (errno == EINTR) continue;
+			return;
+		}
+		len = r;
+		ptr = iobuf;
+		while (len > 0) {
+			r = gdb_recv(&gc, ptr, len);
+			ptr += r;
+			len -= r;
+		}
 	}
 }
