@@ -421,6 +421,10 @@ int do_watch_rw(int argc, param *argv) {
 	return swdp_watchpoint_rw(0, argv[0].n);
 }
 
+int do_watch_off(int argc, param *argv) {
+	return swdp_watchpoint_disable(0);
+}
+
 int do_print(int argc, param *argv) {
 	while (argc-- > 0)
 		xprintf("%08x ", argv++[0].n);
@@ -581,6 +585,7 @@ int run_flash_agent(u32 flashaddr, void *data, size_t data_sz) {
 		}
 		swdp_core_resume();
 		swdp_core_wait_for_halt();
+		swdp_watchpoint_disable(0);
 		// todo: timeout?
 		// todo: confirm halted
 	}
@@ -704,6 +709,7 @@ struct debugger_command debugger_commands[] = {
 	{ "reset-hw",	"", do_reset_hw, "strobe /RESET pin" },
 	{ "watch-pc",	"", do_watch_pc, "set watchpoint at addr" },
 	{ "watch-rw",	"", do_watch_rw, "set watchpoint at addr" },
+	{ "watch-off",	"", do_watch_off, "disable watchpoint" },
 	{ "print",	"", do_print,	"print numeric arguments" },
 	{ "echo",	"", do_echo, "echo command line" },
 	{ "bootloader", "", do_bootloader, "reboot into bootloader" },

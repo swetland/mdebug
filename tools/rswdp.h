@@ -45,6 +45,7 @@ int swdp_watchpoint_pc(unsigned n, u32 addr);
 int swdp_watchpoint_rd(unsigned n, u32 addr);
 int swdp_watchpoint_wr(unsigned n, u32 addr);
 int swdp_watchpoint_rw(unsigned n, u32 addr);
+int swdp_watchpoint_disable(unsigned n);
 
 /* attempt to clear any error state from previous transactions */
 /* return 0 if successful (or no error state existed) */

@@ -505,6 +505,10 @@ int swdp_watchpoint_rw(unsigned n, u32 addr) {
 	return swdp_watchpoint(n, addr, FUNC_WATCH_RW);
 }
 
+int swdp_watchpoint_disable(unsigned n) {
+	return swdp_watchpoint(n, 0, FUNC_DISABLED);
+}
+
 int swdp_bootloader(void) {
 	struct txn t;
 	q_init(&t);
