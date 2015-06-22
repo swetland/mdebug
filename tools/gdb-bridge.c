@@ -244,7 +244,20 @@ static const char *target_xml =
 "</target>";
 
 static void handle_query(struct gdbcnxn *gc, char *cmd, char *args) {
-	if (!strcmp(cmd,"Rcmd")) {
+	if (!strcmp(cmd, "fThreadInfo")) {
+		/* report just one thread id, #1, for now */
+		gdb_puts(gc, "m1");
+	} else if(!strcmp(cmd, "sThreadInfo")) {
+		/* no additional thread ids */
+		gdb_puts(gc, "l");
+	} else if(!strcmp(cmd, "ThreadExtraInfo")) {
+		/* gdb manual suggest 'Runnable', 'Blocked on Mutex', etc */
+		/* informational text shown in gdb's "info threads" listing */
+		gdb_puthex(gc, "Native", 6);
+	} else if(!strcmp(cmd, "C")) {
+		/* current thread ID */
+		gdb_puts(gc, "QC1");
+	} else if (!strcmp(cmd, "Rcmd")) {
 		char *p = args;
 		cmd = p;
 		while (p[0] && p[1]) {
@@ -257,7 +270,7 @@ static void handle_query(struct gdbcnxn *gc, char *cmd, char *args) {
 		gdb_puts(gc,
 			"qXfer:features:read+"
 			";QStartNoAckMode+"
-			";PacketSize=2000"
+			";PacketSize=2004" /* size includes "$" and "#xx" */
 			);
 	} else if(!strcmp(cmd, "Xfer")) {
 		if (!strncmp(args, "features:read:target.xml:", 25)) {
@@ -265,6 +278,10 @@ static void handle_query(struct gdbcnxn *gc, char *cmd, char *args) {
 			// todo: support binary format w/ escaping
 			gdb_puts(gc, target_xml);
 		}
+	} else if(!strcmp(cmd, "TStatus")) {
+		/* tracepoints unsupported. ignore. */
+	} else if(!strcmp(cmd, "Attached")) {
+		/* no process management. ignore */
 	} else {
 		zprintf("GDB: unsupported: q%s:%s\n", cmd, args);
 	}
@@ -365,7 +382,7 @@ void gdb_server(int fd) {
 
 	for (;;) {
 		r = read(fd, iobuf, sizeof(iobuf));
-		if (r < 0) {
+		if (r <= 0) {
 			if (errno == EINTR) continue;
 			return;
 		}
