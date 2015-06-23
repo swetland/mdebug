@@ -284,7 +284,11 @@ static void handle_query(struct gdbcnxn *gc, char *cmd, char *args) {
 			p+=2;
 		}
 		*cmd = 0;
+		zprintf("GBD: %s\n", p);
+		debugger_unlock();
 		debugger_command(args);
+		debugger_lock();
+		gdb_puts(gc, "OK");
 	} else if(!strcmp(cmd, "Supported")) {
 		gdb_puts(gc,
 			"qXfer:features:read+"
