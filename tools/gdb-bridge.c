@@ -22,6 +22,7 @@
 #include <string.h>
 #include <errno.h>
 #include <signal.h>
+#include <poll.h>
 
 #include <fw/types.h>
 #include "rswdp.h"
@@ -34,20 +35,22 @@
 // set debug arch 1                 architecture tracing
 // maint print registers-remote     check on register map
 
-#define MAXPKT	8192
+#define MAXPKT		8192
 
-#define S_IDLE	0
-#define S_RECV	1
-#define S_CHK1	2
-#define S_CHK2	3
+#define S_IDLE		0
+#define S_RECV		1
+#define S_CHK1		2
+#define S_CHK2		3
 
-#define F_ACK	1
-#define F_TRACE	2
+#define F_ACK		1
+#define F_TRACE		2
+#define F_RUNNING	4
 
 struct gdbcnxn {
 	int fd;
 	unsigned state;
-	unsigned sum;
+	unsigned txsum;
+	unsigned rxsum;
 	unsigned flags;
 	unsigned char *txptr;	
 	unsigned char *rxptr;
@@ -68,7 +71,8 @@ void zprintf(const char *fmt, ...) {
 void gdb_init(struct gdbcnxn *gc, int fd) {
 	gc->fd = fd;
 	gc->state = S_IDLE;
-	gc->sum = 0;
+	gc->txsum = 0;
+	gc->rxsum = 0;
 	gc->flags = F_ACK;
 	gc->txptr = gc->txbuf;
 	gc->rxptr = gc->rxbuf;
@@ -86,7 +90,7 @@ static inline int tx_full(struct gdbcnxn *gc) {
 static inline void gdb_putc(struct gdbcnxn *gc, unsigned n) {
 	unsigned char c = n;
 	if (!tx_full(gc)) {
-		gc->sum += c;
+		gc->txsum += c;
 		*(gc->txptr++) = c;
 	}
 }
@@ -100,14 +104,14 @@ void gdb_puts(struct gdbcnxn *gc, const char *s) {
 void gdb_prologue(struct gdbcnxn *gc) {
 	gc->txptr = gc->txbuf;
 	*(gc->txptr++) = '$';
-	gc->sum = 0;
+	gc->txsum = 0;
 }
 
 void gdb_epilogue(struct gdbcnxn *gc) {
 	unsigned char *ptr;
 	int len, r;
 	char tmp[4];
-	sprintf(tmp,"#%02x", gc->sum & 0xff);
+	sprintf(tmp,"#%02x", gc->txsum & 0xff);
 	gdb_puts(gc, tmp);
 
 	if (tx_full(gc)) {
@@ -165,7 +169,7 @@ int gdb_recv(struct gdbcnxn *gc, unsigned char *ptr, int len) {
 				gdb_recv_cmd(gc);
 			} else if (c == '$') {
 				gc->state = S_RECV;
-				gc->sum = 0;
+				gc->rxsum = 0;
 				gc->rxptr = gc->rxbuf;
 			}
 			break;
@@ -179,7 +183,7 @@ int gdb_recv(struct gdbcnxn *gc, unsigned char *ptr, int len) {
 					gc->state = S_IDLE;
 				} else {
 					*(gc->rxptr++) = c;
-					gc->sum += c;
+					gc->rxsum += c;
 				}
 			}
 			break;
@@ -191,7 +195,7 @@ int gdb_recv(struct gdbcnxn *gc, unsigned char *ptr, int len) {
 			gc->chk[1] = c;
 			gc->state = S_IDLE;
 			*(gc->rxptr++) = 0;
-			if (strtoul(gc->chk, NULL, 16) == (gc->sum & 0xFF)) {
+			if (strtoul(gc->chk, NULL, 16) == (gc->rxsum & 0xFF)) {
 				if (gc->flags & F_ACK) {
 					if (write(gc->fd, "+", 1)) ;
 				}
@@ -402,7 +406,21 @@ void handle_command(struct gdbcnxn *gc, unsigned char *cmd) {
 	/* silent (no-response) commands */
 	switch (cmd[0]) {
 	case 'c':
+		if (cmd[1]) {
+			x = strtoul((char*) cmd + 1, NULL, 16) | 1;
+			swdp_core_write(15, x);
+		}
 		swdp_core_resume();
+		gc->flags |= F_RUNNING;
+		return;
+	// single step
+	case 's':
+		if (cmd[1]) {
+			x = strtoul((char*) cmd + 1, NULL, 16) | 1;
+			swdp_core_write(15, x);
+		}
+		swdp_core_step();
+		gc->flags |= F_RUNNING;
 		return;
 	}
 
@@ -410,6 +428,7 @@ void handle_command(struct gdbcnxn *gc, unsigned char *cmd) {
 	switch (cmd[0]) {
 	case '?':
 		gdb_puts(gc, "S00");
+		gc->flags &= (~F_RUNNING);
 		swdp_core_halt();
 		break;
 	case 'H':
@@ -491,11 +510,7 @@ void handle_command(struct gdbcnxn *gc, unsigned char *cmd) {
 	// halt (^c)
 	case '$':
 		swdp_core_halt();
-		gdb_puts(gc, "S00");
-		break;
-	// single step
-	case 's':
-		swdp_core_step();
+		gc->flags &= (~F_RUNNING);
 		gdb_puts(gc, "S00");
 		break;
 	// extended query and set commands
@@ -539,7 +554,17 @@ void handle_command(struct gdbcnxn *gc, unsigned char *cmd) {
 	gdb_epilogue(gc);
 }
 
+static int pipefds[2] = { -1, -1 };
+
+void signal_gdb_server(void) {
+	if (pipefds[1] >= 0) {
+		char x = 0;
+		if (write(pipefds[1], &x, 1) < 0) ;
+	}
+}
+
 void gdb_server(int fd) {
+	struct pollfd fds[2];
 	struct gdbcnxn gc;
 	unsigned char iobuf[32768];
 	unsigned char *ptr;
@@ -547,20 +572,66 @@ void gdb_server(int fd) {
 
 	gdb_init(&gc, fd);
 
+	debugger_lock();
+	if (pipefds[0] == -1) {
+		if (pipe(pipefds)) ;
+	}
+	debugger_unlock();
+
 //	gc.flags |= F_TRACE;
 
 	for (;;) {
-		r = read(fd, iobuf, sizeof(iobuf));
-		if (r <= 0) {
-			if (errno == EINTR) continue;
-			return;
+
+		fds[0].fd = fd;
+		fds[0].events = POLLIN;
+		fds[0].revents = 0;
+		fds[1].fd = pipefds[0];
+		fds[1].events = POLLIN;
+		fds[1].revents = 0;
+
+		// check ahead of the poll, since we may have
+		// just resume'd a single-step that will have
+		// halted again by now
+		debugger_lock();
+		if (gc.flags & F_RUNNING) {
+			u32 csr;
+			if (swdp_ahb_read(CDBG_CSR, &csr) == 0) {
+				if (csr & CDBG_S_HALT) {
+					gc.flags &= (~F_RUNNING);
+					// todo: indicate specific halt reason
+					gdb_prologue(&gc);
+					gdb_puts(&gc, "S00");
+					gdb_epilogue(&gc);
+				}
+			}
 		}
-		len = r;
-		ptr = iobuf;
-		while (len > 0) {
-			r = gdb_recv(&gc, ptr, len);
-			ptr += r;
-			len -= r;
+		debugger_unlock();
+
+		r = poll(fds, 2, (gc.flags & F_RUNNING) ? 10 : -1);
+		if (r < 0) {
+			if (errno == EINTR) continue;
+			break;
+		}
+		if (r == 0) {
+			continue;
+		}
+		if (fds[0].revents & POLLIN) {
+			r = read(fd, iobuf, sizeof(iobuf));
+			if (r <= 0) {
+				if (errno == EINTR) continue;
+				return;
+			}
+			len = r;
+			ptr = iobuf;
+			while (len > 0) {
+				r = gdb_recv(&gc, ptr, len);
+				ptr += r;
+				len -= r;
+			}
+		}
+		if (fds[1].revents & POLLIN) {
+			char x;
+			if (read(fds[1].fd, &x, 1) < 0) ;
 		}
 	}
 }
