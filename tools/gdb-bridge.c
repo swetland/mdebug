@@ -160,7 +160,7 @@ int gdb_recv(struct gdbcnxn *gc, unsigned char *ptr, int len) {
 		switch (gc->state) {
 		case S_IDLE:
 			if (c == 3) {
-				gc->rxbuf[0] = 's';
+				gc->rxbuf[0] = '$';
 				gc->rxbuf[1] = 0;
 				gdb_recv_cmd(gc);
 			} else if (c == '$') {
@@ -351,6 +351,46 @@ void write_memory(u32 addr, unsigned char *data, int len) {
 	}
 }
 
+#define MAXBP 4
+static u32 bp_addr[MAXBP];
+static u32 bp_state[MAXBP];
+
+int handle_breakpoint(int add, u32 addr, u32 kind) {
+	int n;
+	if (add) {
+		for (n = 0; n < MAXBP; n++) {
+			if (bp_state[n] && (bp_addr[n] == addr)) {
+				// already setup
+				return 0;
+			}
+		}
+		for (n = 0; n < MAXBP; n++) {
+			if (bp_state[n] == 0) {
+				bp_addr[n] = addr;
+				bp_state[n] = 1;
+				swdp_watchpoint_pc(n, addr);
+				zprintf("GDB: + HW BP @ %08x\n", addr);
+				return 0;
+			}
+		}
+		if (n == MAXBP) {
+			zprintf("GDB: Out of hardware breakpoints.\n");
+			return 1;
+		}
+		return 0;
+	} else {
+		for (n = 0; n < MAXBP; n++) {
+			if (bp_state[n] && (bp_addr[n] == addr)) {
+				bp_state[n] = 0;
+				swdp_watchpoint_disable(n);
+				break;
+			}
+		}
+		zprintf("GDB: - HW BP @ %08x\n", addr);
+		return 0;
+	}
+}
+
 void handle_command(struct gdbcnxn *gc, unsigned char *cmd) {
 	union {
 		u32 w[256+2];
@@ -448,6 +488,11 @@ void handle_command(struct gdbcnxn *gc, unsigned char *cmd) {
 		}
 		break;
 	}
+	// halt (^c)
+	case '$':
+		swdp_core_halt();
+		gdb_puts(gc, "S00");
+		break;
 	// single step
 	case 's':
 		swdp_core_step();
@@ -471,6 +516,22 @@ void handle_command(struct gdbcnxn *gc, unsigned char *cmd) {
 		}
 		break;
 		
+	}
+	case 'z':
+	case 'Z': {
+		u32 type, addr, kind;
+		if (sscanf((char*) cmd + 1, "%x,%x,%x", &type, &addr, &kind) != 3) {
+			break;
+		}
+		if (type != 1) {
+			// only support hw breakpoints
+		}
+		if (handle_breakpoint(cmd[0] == 'Z', addr, kind)) {
+			gdb_puts(gc, "OK");
+		} else {
+			gdb_puts(gc, "E1");
+		}
+		break;
 	}
 	default:
 		zprintf("GDB: unknown command: %c\n", cmd[0]);
