@@ -79,14 +79,21 @@ static pthread_t _dbg_thread;
 void debugger_lock() {
 	pthread_mutex_lock(&_dbg_lock);
 	if (swdp_clear_error()) {
+#if 0
+		// way too noisy if the link goes down
+		linenoisePause();
 		xprintf("SWD ERROR persists. Attempting link reset.\n");
+		linenoiseResume();
+#endif
 		swdp_reset();
 	}
 }
 
 void debugger_unlock() {
 	if (swdp_error()) {
+		linenoisePause();
 		xprintf("SWD ERROR\n");
+		linenoiseResume();
 	}
 	pthread_mutex_unlock(&_dbg_lock);
 }
