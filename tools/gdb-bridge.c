@@ -546,9 +546,9 @@ void handle_command(struct gdbcnxn *gc, unsigned char *cmd) {
 			// only support hw breakpoints
 		}
 		if (handle_breakpoint(cmd[0] == 'Z', addr, kind)) {
-			gdb_puts(gc, "OK");
-		} else {
 			gdb_puts(gc, "E1");
+		} else {
+			gdb_puts(gc, "OK");
 		}
 		break;
 	}
