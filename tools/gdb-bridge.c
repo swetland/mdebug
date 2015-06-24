@@ -363,6 +363,13 @@ void write_memory(u32 addr, unsigned char *data, int len) {
 	}
 }
 
+// bit 1 in each romtable entry indicates peripheral is present
+#define ROMTAB_DWT	0xE00FF004
+#define ROMTAB_FPB	0xE00FF008
+#define ROMTAB_ITM	0xE00FF00C
+#define ROMTAB_TPIU	0xE00FF010
+#define ROMTAB_ETM	0xE00FF014
+
 #define DWT_CTRL	0xE0001000
 
 #define FP_CTRL		0xE0002000
@@ -382,11 +389,19 @@ static u32 bp_state[MAXBP] = { 0, };
 int handle_flashpatch(int add, u32 addr, u32 kind) {
 	u32 x;
 	int n;
-	if (swdp_ahb_read(FP_CTRL, &x)) {
-		zprintf("GDB: cannot read flashpatch ctrl\n");
+	if (swdp_ahb_read(ROMTAB_FPB, &x)) {
+		zprintf("GDB: cannot read romtable\n");
 		return -1;
 	}
-	n = ((x & 0xF0) >> 4) | ((x & 0x7000) >> 4);
+	if (x & 1) {
+		if (swdp_ahb_read(FP_CTRL, &x)) {
+			zprintf("GDB: cannot read flashpatch ctrl\n");
+			return -1;
+		}
+		n = ((x & 0xF0) >> 4) | ((x & 0x7000) >> 4);
+	} else {
+		n = 0;
+	}
 	if (n != maxfp) {
 		zprintf("GDB: %d flashpatch breakpoint registers\n", n);
 		if (n > 16) n = 16;
@@ -440,11 +455,19 @@ int handle_breakpoint(int add, u32 addr, u32 kind) {
 	if ((addr < 0x20000000) && (!handle_flashpatch(add,addr,kind))) {
 		return 0;
 	}
-	if (swdp_ahb_read(DWT_CTRL, &x)) {
-		zprintf("GDB: cannot read dwt ctrl\n");
+	if (swdp_ahb_read(ROMTAB_DWT, &x)) {
+		zprintf("GDB: cannot read romtable\n");
 		return -1;
 	}
-	n = x >> 28;
+	if (x & 1) {
+		if (swdp_ahb_read(DWT_CTRL, &x)) {
+			zprintf("GDB: cannot read dwt ctrl\n");
+			return -1;
+		}
+		n = x >> 28;
+	} else {
+		n = 0;
+	}
 	if (n != maxbp) {
 		zprintf("GDB: %d dwt breakpoint registers\n", n);
 		if (maxbp != 0) {
