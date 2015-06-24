@@ -284,7 +284,7 @@ static void handle_query(struct gdbcnxn *gc, char *cmd, char *args) {
 			p+=2;
 		}
 		*cmd = 0;
-		zprintf("GBD: %s\n", p);
+		zprintf("GDB: %s\n", args);
 		debugger_unlock();
 		debugger_command(args);
 		debugger_lock();
@@ -580,6 +580,7 @@ void gdb_server(int fd) {
 	if (pipefds[0] == -1) {
 		if (pipe(pipefds)) ;
 	}
+	zprintf("[ gdb connected ]\n");
 	debugger_unlock();
 
 //	gc.flags |= F_TRACE;
@@ -623,7 +624,7 @@ void gdb_server(int fd) {
 			r = read(fd, iobuf, sizeof(iobuf));
 			if (r <= 0) {
 				if (errno == EINTR) continue;
-				return;
+				break;
 			}
 			len = r;
 			ptr = iobuf;
@@ -638,4 +639,8 @@ void gdb_server(int fd) {
 			if (read(fds[1].fd, &x, 1) < 0) ;
 		}
 	}
+
+	debugger_lock();
+	zprintf("[ gdb connected ]\n");
+	debugger_unlock();
 }

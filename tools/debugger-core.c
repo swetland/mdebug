@@ -114,22 +114,14 @@ static pthread_t _listen_master;
 void *gdb_listener(void *arg) {
 	int fd;
 	if ((fd = socket_listen_tcp(5555)) < 0) {
-		linenoisePause();
-		xprintf("gdb_listener() cannot bind to 5555\n");
-		linenoiseResume();
+		fprintf(stderr, "gdb_listener() cannot bind to 5555\n");
 		return NULL;
 	}
 	for (;;) {
 		int s = accept(fd, NULL, NULL);
 		if (s >= 0) {
-			linenoisePause();
-			xprintf("[ gdb connected ]\n");
-			linenoiseResume();
 			gdb_server(s);
 			close(s);
-			linenoisePause();
-			xprintf("[ gdb disconnected ]\n");
-			linenoiseResume();
 		}
 	}
 	return NULL;
@@ -430,7 +422,9 @@ static int _debugger_exec(const char *cmd, unsigned argc, param *argv) {
 		if (!strcasecmp(cmd, c->name)) {
 			int n;
 			debugger_lock();
+			linenoisePause();
 			n = c->func(argc, argv);
+			linenoiseResume();
 			debugger_unlock();
 			return n;
 		}
