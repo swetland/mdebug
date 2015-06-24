@@ -34,11 +34,16 @@ void linenoiseInit(void);
 
 static const char *scriptfile = NULL;
 
+void gdb_console_puts(const char *msg);
+
 void xprintf(const char *fmt, ...) {
+	char line[256];
 	va_list ap;
 	va_start(ap, fmt);
-	vprintf(fmt, ap);
+	vsnprintf(line, 256, fmt, ap);
 	va_end(ap);
+	if (write(1, line, strlen(line)) < 0) ;
+	gdb_console_puts(line);
 }
 
 static void handler(int n) {

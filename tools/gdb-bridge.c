@@ -45,6 +45,7 @@
 #define F_ACK		1
 #define F_TRACE		2
 #define F_RUNNING	4
+#define F_CONSOLE	8
 
 struct gdbcnxn {
 	int fd;
@@ -134,8 +135,8 @@ void gdb_epilogue(struct gdbcnxn *gc) {
 }
 
 static char HEX[16] = "0123456789abcdef";
-void gdb_puthex(struct gdbcnxn *gc, void *ptr, unsigned len) {
-	unsigned char *data = ptr;
+void gdb_puthex(struct gdbcnxn *gc, const void *ptr, unsigned len) {
+	const unsigned char *data = ptr;
 	while (len-- > 0) {
 		unsigned c = *data++;
 		gdb_putc(gc, HEX[c >> 4]);
@@ -285,9 +286,12 @@ static void handle_query(struct gdbcnxn *gc, char *cmd, char *args) {
 		}
 		*cmd = 0;
 		zprintf("GDB: %s\n", args);
+		gc->flags |= F_CONSOLE;
 		debugger_unlock();
 		debugger_command(args);
 		debugger_lock();
+		gc->flags &= ~F_CONSOLE;
+		gdb_prologue(gc);
 		gdb_puts(gc, "OK");
 	} else if(!strcmp(cmd, "Supported")) {
 		gdb_puts(gc,
@@ -567,6 +571,17 @@ void signal_gdb_server(void) {
 	}
 }
 
+static struct gdbcnxn *active_gc = NULL;
+
+void gdb_console_puts(const char *msg) {
+	if (active_gc == NULL) return;
+	if (!(active_gc->flags & F_CONSOLE)) return;
+	gdb_prologue(active_gc);
+	gdb_putc(active_gc, 'O');
+	gdb_puthex(active_gc, msg, strlen(msg));
+	gdb_epilogue(active_gc);
+}
+
 void gdb_server(int fd) {
 	struct pollfd fds[2];
 	struct gdbcnxn gc;
@@ -577,6 +592,7 @@ void gdb_server(int fd) {
 	gdb_init(&gc, fd);
 
 	debugger_lock();
+	active_gc = &gc;
 	if (pipefds[0] == -1) {
 		if (pipe(pipefds)) ;
 	}
@@ -641,6 +657,7 @@ void gdb_server(int fd) {
 	}
 
 	debugger_lock();
+	active_gc = NULL;
 	zprintf("[ gdb connected ]\n");
 	debugger_unlock();
 }
