@@ -363,20 +363,104 @@ void write_memory(u32 addr, unsigned char *data, int len) {
 	}
 }
 
-#define MAXBP 4
-static u32 bp_addr[MAXBP];
-static u32 bp_state[MAXBP];
+#define DWT_CTRL	0xE0001000
+
+#define FP_CTRL		0xE0002000
+#define FP_REMAP	0xE0002004
+#define FP_COMP(n)	(0xE0002008 + ((n) * 4))
+
+#define MAXFP 16 
+static u32 maxfp = 0;
+static u32 fp_addr[MAXFP] = { 0, };
+static u32 fp_state[MAXFP] = { 0, };
+
+#define MAXBP 16
+static u32 maxbp; 
+static u32 bp_addr[MAXBP] = { 0, };
+static u32 bp_state[MAXBP] = { 0, };
+
+int handle_flashpatch(int add, u32 addr, u32 kind) {
+	u32 x;
+	int n;
+	if (swdp_ahb_read(FP_CTRL, &x)) {
+		zprintf("GDB: cannot read flashpatch ctrl\n");
+		return -1;
+	}
+	n = ((x & 0xF0) >> 4) | ((x & 0x7000) >> 4);
+	if (n != maxfp) {
+		zprintf("GDB: %d flashpatch breakpoint registers\n", n);
+		if (n > 16) n = 16;
+		if (maxfp != 0) {
+			zprintf("GDB: previously %d registers...\n", maxfp);
+		}
+		maxfp = n;
+	}
+	for (n = 0; n < maxfp; n++) {
+		if (fp_state[n] && (fp_addr[n] == addr)) {
+			if (add) {
+				goto add0;
+			} else {
+				fp_state[n] = 0;
+				swdp_ahb_write(FP_COMP(n), 0);
+				zprintf("GDB: - FP BP @ %08x\n", addr);
+				return 0;
+			}
+		}
+	}
+	if (!add) {
+		// no breakpoint to remove
+		return -1;
+	}
+	for (n = 0; n < maxfp; n++) {
+		if (fp_state[n] == 0) {
+			goto add1;
+		}
+	}
+	return -1;
+add1:
+	swdp_ahb_write(FP_CTRL,3);
+	if (addr & 2) {
+		// breakpoint on low half-word, enable
+		swdp_ahb_write(FP_COMP(n), 0x80000001 | (addr & 0x1FFFFFFC));
+	} else {
+		// breakpoint on high half-word, enable
+		swdp_ahb_write(FP_COMP(n), 0x40000001 | (addr & 0x1FFFFFFC));
+	}
+	fp_state[n] = 1;
+	fp_addr[n] = addr;
+add0:
+	zprintf("GDB: + FP BP @ %08x\n", addr);
+	return 0;
+}
 
 int handle_breakpoint(int add, u32 addr, u32 kind) {
+	u32 x;
 	int n;
+
+	if ((addr < 0x20000000) && (!handle_flashpatch(add,addr,kind))) {
+		return 0;
+	}
+	if (swdp_ahb_read(DWT_CTRL, &x)) {
+		zprintf("GDB: cannot read dwt ctrl\n");
+		return -1;
+	}
+	n = x >> 28;
+	if (n != maxbp) {
+		zprintf("GDB: %d dwt breakpoint registers\n", n);
+		if (maxbp != 0) {
+			zprintf("GDB: previously %d registers...\n", maxbp);
+		}
+		maxbp = n;
+	}
+
 	if (add) {
-		for (n = 0; n < MAXBP; n++) {
+		for (n = 0; n < maxbp; n++) {
 			if (bp_state[n] && (bp_addr[n] == addr)) {
 				// already setup
 				return 0;
 			}
 		}
-		for (n = 0; n < MAXBP; n++) {
+		for (n = 0; n < maxbp; n++) {
 			if (bp_state[n] == 0) {
 				bp_addr[n] = addr;
 				bp_state[n] = 1;
@@ -385,13 +469,13 @@ int handle_breakpoint(int add, u32 addr, u32 kind) {
 				return 0;
 			}
 		}
-		if (n == MAXBP) {
+		if (n == maxbp) {
 			zprintf("GDB: Out of hardware breakpoints.\n");
 			return 1;
 		}
 		return 0;
 	} else {
-		for (n = 0; n < MAXBP; n++) {
+		for (n = 0; n < maxbp; n++) {
 			if (bp_state[n] && (bp_addr[n] == addr)) {
 				bp_state[n] = 0;
 				swdp_watchpoint_disable(n);
