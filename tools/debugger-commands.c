@@ -32,6 +32,7 @@
 #include <fw/types.h>
 #include <protocol/rswdp.h>
 #include "rswdp.h"
+#include "arm-v7m.h"
 
 #include "debugger.h"
 
@@ -708,10 +709,55 @@ int do_log(int argc, param *argv) {
 	return 0;
 }
 
+int do_finfo(int argc, param *argv) {
+	u32 cfsr = 0, hfsr = 0, dfsr = 0, mmfar = 0, bfar = 0;
+	swdp_ahb_read(CFSR, &cfsr);
+	swdp_ahb_read(HFSR, &hfsr);
+	swdp_ahb_read(DFSR, &dfsr);
+	swdp_ahb_read(MMFAR, &mmfar);
+	swdp_ahb_read(BFAR, &bfar);
+
+	xprintf("CFSR %08x  MMFAR %08x\n", cfsr, mmfar);
+	xprintf("HFSR %08x   BFAR %08x\n", hfsr, bfar);
+	xprintf("DFSR %08x\n", dfsr);
+
+	if (cfsr & CFSR_IACCVIOL)	xprintf(">MM: Inst Access Violation\n");
+	if (cfsr & CFSR_DACCVIOL)	xprintf(">MM: Data Access Violation\n");
+	if (cfsr & CFSR_MUNSTKERR)	xprintf(">MM: Derived MM Fault on Exception Return\n");
+	if (cfsr & CFSR_MSTKERR)	xprintf(">MM: Derived MM Fault on Exception Entry\n");
+	if (cfsr & CFSR_MLSPERR)	xprintf(">MM: MM Fault During Lazy FP Save\n");
+	if (cfsr & CFSR_MMARVALID)	xprintf(">MM: MMFAR has valid contents\n");
+
+	if (cfsr & CFSR_IBUSERR)	xprintf(">BF: Bus Fault on Instruction Prefetch\n");
+	if (cfsr & CFSR_PRECISERR)	xprintf(">BF: Precise Data Access Error, Addr in BFAR\n");
+	if (cfsr & CFSR_IMPRECISERR)	xprintf(">BF: Imprecise Data Access Error\n");
+	if (cfsr & CFSR_UNSTKERR)	xprintf(">BF: Derived Bus Fault on Exception Return\n");
+	if (cfsr & CFSR_STKERR)		xprintf(">BF: Derived Bus Fault on Exception Entry\n");
+	if (cfsr & CFSR_LSPERR)		xprintf(">BF: Bus Fault During Lazy FP Save\n");
+	if (cfsr & CFSR_BFARVALID)	xprintf(">BF: BFAR has valid contents\n");
+
+	if (cfsr & CFSR_UNDEFINSTR)	xprintf(">UF: Undefined Instruction Usage Fault\n");
+	if (cfsr & CFSR_INVSTATE)	xprintf(">UF: EPSR.T or ESPR.IT invalid\n");
+	if (cfsr & CFSR_INVPC)		xprintf(">UF: Integrity Check Error on EXC_RETURN\n");
+	if (cfsr & CFSR_NOCP)		xprintf(">UF: Coprocessor Error\n");
+	if (cfsr & CFSR_UNALIGNED)	xprintf(">UF: Unaligned Access Error\n");
+	if (cfsr & CFSR_DIVBYZERO)	xprintf(">UF: Divide by Zero\n");
+
+	if (hfsr & HFSR_VECTTBL)	xprintf(">HF: Vector Table Read Fault\n");
+	if (hfsr & HFSR_FORCED)		xprintf(">HF: Exception Escalated to Hard Fault\n");
+	if (hfsr & HFSR_DEBUGEVT)	xprintf(">HF: Debug Event\n");
+
+	// clear sticky fault bits
+	swdp_ahb_write(CFSR, CFSR_ALL);
+	swdp_ahb_write(HFSR, HFSR_ALL);
+	return 0;
+}
+
 struct debugger_command debugger_commands[] = {
 	{ "exit",	"", do_exit,		"" },
 	{ "attach",	"", do_attach,		"attach/reattach to sw-dp" },
 	{ "regs",	"", do_regs,		"show cpu registers" },
+	{ "finfo",	"", do_finfo,		"Fault Information" },
 	{ "stop",	"", do_stop,		"halt cpu" },
 	{ "step",	"", do_step,		"single-step cpu" },
 	{ "go",		"", do_resume,		"resume cpu" },
