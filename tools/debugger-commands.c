@@ -690,33 +690,52 @@ int do_erase(int argc, param *argv) {
 	return run_flash_agent(argv[0].n, NULL, argv[1].n);
 }
 
+int do_log(int argc, param *argv) {
+	unsigned flags = 0;
+	while (argc > 0) {
+		if (!strcmp(argv[0].s, "gdb")) {
+			flags |= LF_GDB;
+		} else if (!strcmp(argv[0].s, "swd")) {
+			flags |= LF_SWD;
+		} else {
+			xprintf("error: allowed flags: gdb swd\n");
+			return -1;
+		}
+		argc--;
+		argv++;
+	}
+	log_flags = flags;
+	return 0;
+}
+
 struct debugger_command debugger_commands[] = {
-	{ "exit",	"", do_exit,	"" },
-	{ "attach",	"", do_attach,	"attach/reattach to sw-dp" },
-	{ "regs",	"", do_regs,	"show cpu registers" },
-	{ "stop",	"", do_stop,	"halt cpu" },
-	{ "step",	"", do_step,	"single-step cpu" },
-	{ "go",		"", do_resume,	"resume cpu" },
-	{ "dw",		"", do_dw,	"dump words" },
-	{ "db",		"", do_db,	"dump bytes" },
-	{ "dr",		"", do_dr,	"dump register" },
-	{ "wr",		"", do_wr,	"write register" },
-	{ "download",	"", do_download,"download file to device" },
-	{ "flash",	"", do_flash,	"write file to device flash" },
-	{ "erase",	"", do_erase,	"erase flash" },
-	{ "reset",	"", do_reset,	"reset target" },
-	{ "reset-stop",	"", do_reset_stop, "reset target and halt cpu" },
-	{ "reset-hw",	"", do_reset_hw, "strobe /RESET pin" },
-	{ "watch-pc",	"", do_watch_pc, "set watchpoint at addr" },
-	{ "watch-rw",	"", do_watch_rw, "set watchpoint at addr" },
-	{ "watch-off",	"", do_watch_off, "disable watchpoint" },
-	{ "print",	"", do_print,	"print numeric arguments" },
-	{ "echo",	"", do_echo, "echo command line" },
-	{ "bootloader", "", do_bootloader, "reboot into bootloader" },
-	{ "setclock",	"", do_setclock, "set clock rate (khz)" },
-	{ "arch",	"", do_setarch, "set architecture for flash agent" },
-	{ "text",	"", do_text, "dump text" },
-	{ "help",	"", do_help, "help" },
+	{ "exit",	"", do_exit,		"" },
+	{ "attach",	"", do_attach,		"attach/reattach to sw-dp" },
+	{ "regs",	"", do_regs,		"show cpu registers" },
+	{ "stop",	"", do_stop,		"halt cpu" },
+	{ "step",	"", do_step,		"single-step cpu" },
+	{ "go",		"", do_resume,		"resume cpu" },
+	{ "dw",		"", do_dw,		"dump words" },
+	{ "db",		"", do_db,		"dump bytes" },
+	{ "dr",		"", do_dr,		"dump register" },
+	{ "wr",		"", do_wr,		"write register" },
+	{ "download",	"", do_download,	"download file to device" },
+	{ "flash",	"", do_flash,		"write file to device flash" },
+	{ "erase",	"", do_erase,		"erase flash" },
+	{ "reset",	"", do_reset,		"reset target" },
+	{ "reset-stop",	"", do_reset_stop,	"reset target and halt cpu" },
+	{ "reset-hw",	"", do_reset_hw,	"strobe /RESET pin" },
+	{ "watch-pc",	"", do_watch_pc,	"set watchpoint at addr" },
+	{ "watch-rw",	"", do_watch_rw,	"set watchpoint at addr" },
+	{ "watch-off",	"", do_watch_off,	"disable watchpoint" },
+	{ "log",	"", do_log,		"enable/disable logging" },
+	{ "print",	"", do_print,		"print numeric arguments" },
+	{ "echo",	"", do_echo,		"echo command line" },
+	{ "bootloader", "", do_bootloader,	"reboot into bootloader" },
+	{ "setclock",	"", do_setclock,	"set clock rate (khz)" },
+	{ "arch",	"", do_setarch,		"set architecture for flash agent" },
+	{ "text",	"", do_text,		"dump text" },
+	{ "help",	"", do_help,		"help" },
 	{ 0, 0, 0, 0 },
 };
 

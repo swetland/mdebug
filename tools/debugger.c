@@ -30,6 +30,8 @@
 #include "linenoise.h"
 #include "debugger.h"
 
+unsigned log_flags = 0;
+
 void linenoiseInit(void);
 
 static const char *scriptfile = NULL;

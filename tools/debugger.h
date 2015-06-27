@@ -24,6 +24,11 @@ extern void xprintf(const char *fmt, ...);
 #define ERROR		-1
 #define ERROR_UNKNOWN 	-2
 
+#define LF_SWD		1
+#define LF_GDB		2
+
+extern unsigned log_flags;
+
 struct funcline {
 	struct funcline *next;
 	char text[0];

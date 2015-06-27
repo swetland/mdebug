@@ -43,7 +43,6 @@
 #define S_CHK2		3
 
 #define F_ACK		1
-#define F_TRACE		2
 #define F_RUNNING	4
 #define F_CONSOLE	8
 
@@ -147,7 +146,7 @@ void gdb_puthex(struct gdbcnxn *gc, const void *ptr, unsigned len) {
 void handle_command(struct gdbcnxn *gc, unsigned char *cmd);
 
 void gdb_recv_cmd(struct gdbcnxn *gc) {
-	if (gc->flags & F_TRACE) {
+	if (log_flags & LF_GDB) {
 		zprintf("PKT: %s\n", gc->rxbuf);
 	}
 	debugger_lock();
@@ -705,8 +704,6 @@ void gdb_server(int fd) {
 	}
 	zprintf("[ gdb connected ]\n");
 	debugger_unlock();
-
-//	gc.flags |= F_TRACE;
 
 	for (;;) {
 
