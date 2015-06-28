@@ -2,10 +2,10 @@
 #define _ARM_V7M_H_
 
 // ---- debug registers -----------------
-#define	DHCSR			0xE00EDF0 // Debug Halting Ctrl/Stat
-#define DCRSR			0xE00EDF4 // Debug Core Reg Select
-#define DCRDR			0xE00EDF8 // Debug Core Reg Data
-#define DEMCR			0xE00EDFC // Debug Exception & Monitor Ctrl
+#define	DHCSR			0xE000EDF0 // Debug Halting Ctrl/Stat
+#define DCRSR			0xE000EDF4 // Debug Core Reg Select
+#define DCRDR			0xE000EDF8 // Debug Core Reg Data
+#define DEMCR			0xE000EDFC // Debug Exception & Monitor Ctrl
 
 #define DHCSR_DBGKEY		0xA05F0000
 #define DHCSR_S_RESET_ST	(1 << 25) // CPU Reset Since Last Read (CoR)
@@ -85,6 +85,62 @@
 #define HFSR_DEBUGEVT		(1 << 31) // Debug Event Occurred (and halting debug off)
 
 #define HFSR_ALL		0xC0000002 // all fault bits
+
+// ---- Data Watchpoint and Trace --------
+#define DWT_CTRL		0xE0001000 // Control Register
+#define DWT_CYCCNT		0xE0001004 // Cycle Count Register
+#define DWT_CPICNT		0xE0001008 // CPI Count Register
+#define DWT_EXCCNT		0xE000100C // Exception Overhead Count Register
+#define DWT_SLEEPCNT		0xE0001010 // Sleep Count Register
+#define DWT_LSUCNT		0xE0001014 // LSU Count Register
+#define DWT_FOLDCNT		0xE0001018 // Folded Instruction Count Register
+#define DWT_PCSR		0xE000101C // Program Counter Sample Register
+#define DWT_COMP(n)		(0xE0001020 + (n) * 0x10)
+#define DWT_MASK(n)		(0xE0001024 + (n) * 0x10)
+#define DWT_FUNC(n)		(0xE0001028 + (n) * 0x10)
+
+// ---- DWT_CTRL bits ---------
+#define DWT_CYCCNTENA		(1 << 0)  // Enable Cycle Counter
+#define DWT_POSTPRESET(n)	(((n) & 15) << 1)
+#define DWT_POSTINIT(n)		(((n) & 15) << 5)
+#define DWT_CYCTAP		(1 << 9)  // 0: POSTCNT tap at CYCCNT[6], 1: at [10]
+#define DWT_SYNCTAP_DISABLE	(0 << 10)
+#define DWT_SYNCTAP_BIT24	(1 << 10)
+#define DWT_SYNCTAP_BIT26	(2 << 10)
+#define DWT_SYNCTAP_BIT28	(3 << 10)
+#define DWT_PCSAMPLENA		(1 << 12) // Enable POSTCNT as timer for PC Sample Pkts
+#define DWT_EXCTRCENA		(1 << 16) // Enable Exception Trace
+#define DWT_CPIEVTENA		(1 << 17) // Enable CPI Counter Overflow Events
+#define DWT_EXCEVTENA		(1 << 18) // Enable Exception Overhead Counter Ovf Evt
+#define DWT_SLEEPEVTENA		(1 << 19) // Enable Sleep Counter Ovf Evt
+#define DWT_LSUEVTENA		(1 << 20) // Enable LSU Counter Ovf Evt
+#define DWT_FOLDEVTENA		(1 << 21) // Enable Folded Instruction Counter Ovf Evt
+#define DWT_CYCEVTENA		(1 << 22) // Enable POSTCNT Undererflow Packets
+#define DWT_NOPRFCNT		(1 << 24) // 1: No Profiling Counters
+#define DWT_NOCYCCNT		(1 << 25) // 1: No Cycle Counter
+#define DWT_NOEXTTRIG		(1 << 26) // 1: No External Match Signals
+#define DWT_NOTRCPKT		(1 << 27) // 1: No Trace Sampling and Exception Tracing
+#define DWT_NUMCOMP(v)		((v) >> 28)
+
+// ---- DWT_FUNC(n) bits ------
+
+#define DWT_FN_DISABLED		0x0
+
+#define DWT_FN_WATCH_PC		0x4
+#define DWT_FN_WATCH_RD		0x5
+#define DWT_FN_WATCH_WR		0x6
+#define DWT_FN_WATCH_RW		0x7
+
+#define DWT_EMITRANGE		(1 << 5)  // 1: Enable Data Trace Address Packet Gen
+#define DWT_CYCMATCH		(1 << 7)  // 1: Cycle Count Comparison (only for COMP0)
+#define DWT_DATAVMATCH		(1 << 8)  // 0: Address Comparison  1: Value Comparison
+#define DWT_LNK1ENA		(1 << 9)  // RO: 1: Linked Comparator Supported
+#define DWT_DATAVSIZE_BYTE	(0 << 10)
+#define DWT_DATAVSIZE_HALF	(1 << 10)
+#define DWT_DATAVSIZE_WORD	(2 << 10)
+#define DWT_DATAVADDR0(n)	(((n) & 15) << 12)
+#define DWT_DATAVADDR1(n)	(((n) & 15) << 16)
+#define DWT_MATCHED		(1 << 24) // Matched since last read. Cleared on read.
 
 #endif
 

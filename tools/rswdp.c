@@ -25,6 +25,7 @@
 #include <fw/types.h>
 #include <protocol/rswdp.h>
 #include "rswdp.h"
+#include "arm-v7m.h"
 
 static volatile int ATTN;
 
@@ -461,16 +462,6 @@ int swdp_core_resume(void) {
 	return swdp_ahb_write(CDBG_CSR, CDBG_CSR_KEY | CDBG_C_DEBUGEN);
 }
 
-#define DWT_COMP(n) (0xE0001020 + (n) * 0x10)
-#define DWT_MASK(n) (0xE0001024 + (n) * 0x10)
-#define DWT_FUNC(n) (0xE0001028 + (n) * 0x10)
-
-#define FUNC_DISABLED	0x0
-#define FUNC_WATCH_PC	0x4
-#define FUNC_WATCH_RD	0x5
-#define FUNC_WATCH_WR	0x6
-#define FUNC_WATCH_RW	0x7
-
 int swdp_watchpoint(unsigned n, u32 addr, u32 func) {
 	struct txn t;
 
@@ -479,9 +470,9 @@ int swdp_watchpoint(unsigned n, u32 addr, u32 func) {
 
 	q_init(&t);
 	/* enable DWT, enable all exception traps */
-	q_ahb_write(&t, CDBG_EMCR, 0x010007F1);
-	q_ahb_write(&t, DWT_FUNC(n), FUNC_DISABLED);
-	if (func != FUNC_DISABLED) {
+	q_ahb_write(&t, DEMCR, DEMCR_TRCENA | DEMCR_VC_CORERESET);
+	q_ahb_write(&t, DWT_FUNC(n), DWT_FN_DISABLED);
+	if (func != DWT_FN_DISABLED) {
 		q_ahb_write(&t, DWT_COMP(n), addr);
 		q_ahb_write(&t, DWT_MASK(n), 0);
 		q_ahb_write(&t, DWT_FUNC(n), func);
@@ -490,23 +481,23 @@ int swdp_watchpoint(unsigned n, u32 addr, u32 func) {
 }
 
 int swdp_watchpoint_pc(unsigned n, u32 addr) {
-	return swdp_watchpoint(n, addr, FUNC_WATCH_PC);
+	return swdp_watchpoint(n, addr, DWT_FN_WATCH_PC);
 }
 
 int swdp_watchpoint_rd(unsigned n, u32 addr) {
-	return swdp_watchpoint(n, addr, FUNC_WATCH_RD);
+	return swdp_watchpoint(n, addr, DWT_FN_WATCH_RD);
 }
 
 int swdp_watchpoint_wr(unsigned n, u32 addr) {
-	return swdp_watchpoint(n, addr, FUNC_WATCH_WR);
+	return swdp_watchpoint(n, addr, DWT_FN_WATCH_WR);
 }
 
 int swdp_watchpoint_rw(unsigned n, u32 addr) {
-	return swdp_watchpoint(n, addr, FUNC_WATCH_RW);
+	return swdp_watchpoint(n, addr, DWT_FN_WATCH_RW);
 }
 
 int swdp_watchpoint_disable(unsigned n) {
-	return swdp_watchpoint(n, 0, FUNC_DISABLED);
+	return swdp_watchpoint(n, 0, DWT_FN_DISABLED);
 }
 
 int swdp_bootloader(void) {
