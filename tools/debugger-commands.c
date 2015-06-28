@@ -25,10 +25,6 @@
 #include <fcntl.h>
 #include <sys/time.h>
 
-/* TODO
- * - fault recovery (try dw 10000000 for example)
- */
-
 #include <fw/types.h>
 #include <protocol/rswdp.h>
 #include "rswdp.h"
@@ -369,19 +365,10 @@ int do_download(int argc, param *argv) {
 
 int do_reset(int argc, param *argv) {
 	swdp_core_halt();	
-	swdp_ahb_write(CDBG_EMCR, 0);
+	swdp_ahb_write(DEMCR, DEMCR_TRCENA);
 	/* core reset and sys reset */
 	swdp_ahb_write(0xe000ed0c, 0x05fa0005);
-	swdp_ahb_write(CDBG_EMCR, 0);
-#if 0
-	if (argc > 0) {
-		swdp_target_reset(argv[0].n);
-	} else {
-		swdp_target_reset(1);
-		usleep(10000);
-		swdp_target_reset(0);
-	}
-#endif
+	swdp_ahb_write(DEMCR, DEMCR_TRCENA);
 	return 0;
 }
 
@@ -395,18 +382,13 @@ int do_reset_hw(int argc, param *argv) {
 
 int do_reset_stop(int argc, param *argv) {
 	swdp_core_halt();
-	swdp_ahb_write(CDBG_EMCR, 1);
-#if 1
-	/* core reset and sys reset */
+	// enable vector-trap on reset, enable DWT/FPB
+	swdp_ahb_write(DEMCR, DEMCR_VC_CORERESET | DEMCR_TRCENA);
+	// core reset and sys reset
 	swdp_ahb_write(0xe000ed0c, 0x05fa0005);
-#else
-	swdp_target_reset(1);
-	usleep(10000);
-	swdp_target_reset(0);
-	usleep(10000);
-#endif
+	//swdp_core_wait_for_halt();
 	do_stop(0,0);
-	swdp_ahb_write(CDBG_EMCR, 0);
+	swdp_ahb_write(DEMCR, DEMCR_TRCENA);
 	return 0;
 }
 
@@ -529,6 +511,8 @@ int invoke(u32 agent, u32 func, u32 r0, u32 r1, u32 r2, u32 r3) {
 	// if the target has bogus data at 0, the processor may be in
 	// pending-exception state after reset-stop, so we will clear
 	// any exceptions and then set the PSR to something reasonable
+
+	// Write VECTCLRACTIVE to AIRCR
 	swdp_ahb_write(0xe000ed0c, 0x05fa0002);
 	swdp_core_write(16, 0x01000000);
 
