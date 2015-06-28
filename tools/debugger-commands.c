@@ -363,12 +363,15 @@ int do_download(int argc, param *argv) {
 	return 0;
 }
 
+// vector catch flags to apply
+u32 vcflags = DEMCR_VC_HARDERR | DEMCR_VC_BUSERR | DEMCR_VC_STATERR | DEMCR_VC_CHKERR;
+
 int do_reset(int argc, param *argv) {
 	swdp_core_halt();	
-	swdp_ahb_write(DEMCR, DEMCR_TRCENA);
+	swdp_ahb_write(DEMCR, DEMCR_TRCENA | vcflags);
 	/* core reset and sys reset */
 	swdp_ahb_write(0xe000ed0c, 0x05fa0005);
-	swdp_ahb_write(DEMCR, DEMCR_TRCENA);
+	swdp_ahb_write(DEMCR, DEMCR_TRCENA | vcflags);
 	return 0;
 }
 
@@ -383,12 +386,12 @@ int do_reset_hw(int argc, param *argv) {
 int do_reset_stop(int argc, param *argv) {
 	swdp_core_halt();
 	// enable vector-trap on reset, enable DWT/FPB
-	swdp_ahb_write(DEMCR, DEMCR_VC_CORERESET | DEMCR_TRCENA);
+	swdp_ahb_write(DEMCR, DEMCR_VC_CORERESET | DEMCR_TRCENA | vcflags);
 	// core reset and sys reset
 	swdp_ahb_write(0xe000ed0c, 0x05fa0005);
 	//swdp_core_wait_for_halt();
 	do_stop(0,0);
-	swdp_ahb_write(DEMCR, DEMCR_TRCENA);
+	swdp_ahb_write(DEMCR, DEMCR_TRCENA | vcflags);
 	return 0;
 }
 
