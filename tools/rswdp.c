@@ -424,12 +424,66 @@ int swdp_core_read_all(u32 *v) {
 	return q_exec(&t);
 }
 
+int swdp_step_no_ints = 0;
+
 int swdp_core_halt(void) {
-	return swdp_ahb_write(CDBG_CSR, CDBG_CSR_KEY | CDBG_C_HALT | CDBG_C_DEBUGEN);
+	u32 x;
+	if (swdp_ahb_read(CDBG_CSR, &x)) return -1;
+	x &= (CDBG_C_HALT | CDBG_C_DEBUGEN | CDBG_C_MASKINTS);
+	x |= CDBG_CSR_KEY | CDBG_C_DEBUGEN | CDBG_C_HALT;
+	return swdp_ahb_write(CDBG_CSR, x);
 }
 
 int swdp_core_step(void) {
-	return swdp_ahb_write(CDBG_CSR, CDBG_CSR_KEY | CDBG_C_STEP | CDBG_C_DEBUGEN);
+	u32 x;
+	if (swdp_ahb_read(CDBG_CSR, &x)) return -1;
+	x &= (CDBG_C_HALT | CDBG_C_DEBUGEN | CDBG_C_MASKINTS);
+	x |= CDBG_CSR_KEY;
+
+	if (!(x & CDBG_C_HALT)) {
+		// HALT if we're not already HALTED
+		x |= CDBG_C_HALT | CDBG_C_DEBUGEN;
+		swdp_ahb_write(CDBG_CSR, x);
+	}
+	if (swdp_step_no_ints) {
+		// set MASKINTS if not already set
+		if (!(x & CDBG_C_MASKINTS)) {
+			x |= CDBG_C_MASKINTS;
+			swdp_ahb_write(CDBG_CSR, x);
+		}
+	} else {
+		// clear MASKINTs if not already clear
+		if (x & CDBG_C_MASKINTS) {
+			x &= (~CDBG_C_MASKINTS);
+			swdp_ahb_write(CDBG_CSR, x);
+		}
+	}
+	// STEP
+	x &= (~CDBG_C_HALT);
+	return swdp_ahb_write(CDBG_CSR, x | CDBG_C_STEP);
+}
+
+int swdp_core_resume(void) {
+	u32 x;
+	if (swdp_ahb_read(CDBG_CSR, &x)) return -1;
+	x &= (CDBG_C_HALT | CDBG_C_DEBUGEN | CDBG_C_MASKINTS);
+	x |= CDBG_CSR_KEY | CDBG_C_DEBUGEN;
+
+	if (swdp_step_no_ints > 1) {
+		// not just on during step, but always
+		if (!(x & CDBG_C_MASKINTS)) {
+			x |= CDBG_C_MASKINTS;
+			swdp_ahb_write(CDBG_CSR, x);
+		}
+	} else {
+		if (x & CDBG_C_MASKINTS) {
+			x &= (~CDBG_C_MASKINTS);
+			swdp_ahb_write(CDBG_CSR, x);
+		}
+	}
+
+	x &= ~(CDBG_C_HALT | CDBG_C_STEP);
+	return swdp_ahb_write(CDBG_CSR, x);
 }
 
 int swdp_core_wait_for_halt(void) {
@@ -455,11 +509,6 @@ int swdp_ahb_wait_for_change(u32 addr, u32 oldval) {
 			return -2;
 	} while (val == oldval);
 	return 0;
-}
-
-int swdp_core_resume(void) {
-	/* must leave DEBUGEN on to halt on vector catch, breakpoints, etc */
-	return swdp_ahb_write(CDBG_CSR, CDBG_CSR_KEY | CDBG_C_DEBUGEN);
 }
 
 int swdp_watchpoint(unsigned n, u32 addr, u32 func) {

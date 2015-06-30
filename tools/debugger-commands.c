@@ -740,6 +740,26 @@ int do_finfo(int argc, param *argv) {
 	return 0;
 }
 
+extern int swdp_step_no_ints;
+
+int do_maskints(int argc, param *argv) {
+	if (argc != 1) {
+		xprintf("usage: maskints [on|off|always]\n");
+		return -1;
+	}
+	if (!strcmp(argv[0].s, "on")) {
+		swdp_step_no_ints = 1;
+		xprintf("maskints: while stepping\n");
+	} else if (!strcmp(argv[0].s, "always")) {
+		swdp_step_no_ints = 2;
+		xprintf("maskints: always\n");
+	} else {
+		swdp_step_no_ints = 0;
+		xprintf("maskints: never\n");
+	}
+	return 0;
+}
+
 struct debugger_command debugger_commands[] = {
 	{ "exit",	"", do_exit,		"" },
 	{ "attach",	"", do_attach,		"attach/reattach to sw-dp" },
@@ -762,6 +782,7 @@ struct debugger_command debugger_commands[] = {
 	{ "watch-rw",	"", do_watch_rw,	"set watchpoint at addr" },
 	{ "watch-off",	"", do_watch_off,	"disable watchpoint" },
 	{ "log",	"", do_log,		"enable/disable logging" },
+	{ "maskints",	"", do_maskints,	"enable/disable IRQ mask during step" },
 	{ "print",	"", do_print,		"print numeric arguments" },
 	{ "echo",	"", do_echo,		"echo command line" },
 	{ "bootloader", "", do_bootloader,	"reboot into bootloader" },
