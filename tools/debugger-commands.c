@@ -760,6 +760,18 @@ int do_maskints(int argc, param *argv) {
 	return 0;
 }
 
+typedef struct lkthread lkthread_t;
+lkthread_t *find_lk_threads(int verbose);
+void dump_lk_threads(lkthread_t *t);
+void free_lk_threads(lkthread_t *t);
+
+int do_threads(int argc, param *argv) {
+	lkthread_t *t = find_lk_threads(1);
+	dump_lk_threads(t);
+	free_lk_threads(t);
+	return 0;
+}
+
 struct debugger_command debugger_commands[] = {
 	{ "exit",	"", do_exit,		"" },
 	{ "attach",	"", do_attach,		"attach/reattach to sw-dp" },
@@ -788,6 +800,7 @@ struct debugger_command debugger_commands[] = {
 	{ "bootloader", "", do_bootloader,	"reboot into bootloader" },
 	{ "setclock",	"", do_setclock,	"set clock rate (khz)" },
 	{ "arch",	"", do_setarch,		"set architecture for flash agent" },
+	{ "threads",	"", do_threads,		"thread dump" },
 	{ "text",	"", do_text,		"dump text" },
 	{ "help",	"", do_help,		"help" },
 	{ 0, 0, 0, 0 },
