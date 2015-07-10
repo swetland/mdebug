@@ -51,6 +51,7 @@
 #define DI_OFF_MAGIC	32
 #define DI_OFF_PTR	36
 
+#define LK_THREAD_MAGIC	0x74687264
 #define LIST_OFF_PREV	0
 #define LIST_OFF_NEXT	4
 
@@ -614,9 +615,12 @@ void dump_lk_threads(lkthread_t *t) {
 
 lkthread_t *read_lk_thread(lkdebuginfo_t *di, u32 ptr, int active) {
 	lkthread_t *t = calloc(1, sizeof(lkthread_t));
+	u32 x;
 	int n;
 	if (t == NULL) goto fail;
 	t->threadptr = ptr;
+	if (swdp_ahb_read(ptr, &x)) goto fail;
+	if (x != LK_THREAD_MAGIC) goto fail;
 	if (swdp_ahb_read(LT_NEXT_PTR(di,ptr), &t->nextptr)) goto fail;
 	if (swdp_ahb_read(LT_STATE(di,ptr), &t->state)) goto fail;
 	if (swdp_ahb_read(LT_SAVED_SP(di,ptr), &t->saved_sp)) goto fail;
@@ -701,6 +705,7 @@ lkthread_t *find_lk_threads(int verbose) {
 		x = LIST_TO_THREAD(&di, rtp);
 		if (current->threadptr == x) continue;
 		t = read_lk_thread(&di, x, 0);
+		if (t == NULL) goto fail;
 		t->next = list;
 		list = t;
 	}
