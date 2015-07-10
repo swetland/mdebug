@@ -29,6 +29,7 @@
 #include <protocol/rswdp.h>
 #include "debugger.h"
 #include "linenoise.h"
+#include "lkdebug.h"
 
 // useful gdb stuff
 // set debug remote 1               protocol tracing
@@ -46,50 +47,6 @@
 #define F_RUNNING	0x04
 #define F_CONSOLE	0x08
 #define F_LK_THREADS	0x10
-
-#define DI_MAGIC	0x52474244
-#define DI_OFF_MAGIC	32
-#define DI_OFF_PTR	36
-
-#define LK_THREAD_MAGIC	0x74687264
-#define LIST_OFF_PREV	0
-#define LIST_OFF_NEXT	4
-
-#define LK_MAX_STATE	5
-static char *lkstate[] = {
-	"SUSP ",
-	"READY",
-	"RUN  ",
-	"BLOCK",
-	"SLEEP",
-	"DEAD ",
-	"?????",
-};
-
-typedef struct lkdebuginfo {
-	u32 version;
-	u32 thread_list_ptr;
-	u32 current_thread_ptr;
-	u8 off_list_node;
-	u8 off_state;
-	u8 off_saved_sp;
-	u8 off_was_preempted;
-	u8 off_name;
-	u8 off_waitq;
-} lkdebuginfo_t;
-
-typedef struct lkthread {
-	struct lkthread *next;
-	int active;
-	u32 threadptr;
-	u32 nextptr;
-	u32 state;
-	u32 saved_sp;
-	u32 preempted;
-	u32 waitq;
-	char name[32];
-	u32 regs[17];
-} lkthread_t;
 
 struct gdbcnxn {
 	int fd;
@@ -331,18 +288,16 @@ static void handle_query(struct gdbcnxn *gc, char *cmd, char *args) {
 		gdb_puts(gc, "l");
 	} else if(!strcmp(cmd, "ThreadExtraInfo")) {
 		u32 n = strtoul(args, NULL, 16);
-		lkthread_t *t;
+		lkthread_t *t = find_lk_thread(gc->threadlist, n);
 		/* gdb manual suggest 'Runnable', 'Blocked on Mutex', etc */
 		/* informational text shown in gdb's "info threads" listing */
-		for (t = gc->threadlist; t != NULL; t = t->next) {
-			if (t->threadptr == n) {
-				char tmp[128];
-				sprintf(tmp, "%s - %s", lkstate[t->state], t->name);
-				gdb_puthex(gc, tmp, strlen(tmp));
-				return;
-			}
+		if (t) {
+			char tmp[128];
+			get_lk_thread_name(t, tmp, sizeof(tmp));
+			gdb_puthex(gc, tmp, strlen(tmp));
+		} else {
+			gdb_puthex(gc, "Native", 6);
 		}
-		gdb_puthex(gc, "Native", 6);
 	} else if(!strcmp(cmd, "C")) {
 		/* current thread ID */
 		if (gc->cselected) {
@@ -585,138 +540,6 @@ int handle_breakpoint(int add, u32 addr, u32 kind) {
 	}
 }
 
-void dump_lk_thread(lkthread_t *t) {
-	xprintf("thread: @%08x sp=%08x wq=%08x st=%d name='%s'\n",
-		t->threadptr, t->saved_sp, t->waitq, t->state, t->name);
-	xprintf("  r0 %08x r4 %08x r8 %08x ip %08x\n",
-		t->regs[0], t->regs[4], t->regs[8], t->regs[12]);
-	xprintf("  r1 %08x r5 %08x r9 %08x sp %08x\n",
-		t->regs[1], t->regs[5], t->regs[9], t->regs[13]);
-	xprintf("  r2 %08x r6 %08x 10 %08x lr %08x\n",
-		t->regs[2], t->regs[6], t->regs[10], t->regs[14]);
-	xprintf("  r3 %08x r7 %08x 11 %08x pc %08x\n",
-		t->regs[3], t->regs[7], t->regs[11], t->regs[15]);
-}
-
-void dump_lk_threads(lkthread_t *t) {
-	while (t != NULL) {
-		dump_lk_thread(t);
-		t = t->next;
-	}
-}
-
-#define LT_NEXT_PTR(di,tp) ((tp) + di->off_list_node + LIST_OFF_NEXT)
-#define LT_STATE(di,tp) ((tp) + di->off_state)
-#define LT_SAVED_SP(di,tp) ((tp) + di->off_saved_sp)
-#define LT_NAME(di,tp) ((tp) + di->off_name)
-#define LT_WAITQ(di,tp) ((tp) + di->off_waitq)
-
-#define LIST_TO_THREAD(di,lp) ((lp) - (di)->off_list_node)
-
-lkthread_t *read_lk_thread(lkdebuginfo_t *di, u32 ptr, int active) {
-	lkthread_t *t = calloc(1, sizeof(lkthread_t));
-	u32 x;
-	int n;
-	if (t == NULL) goto fail;
-	t->threadptr = ptr;
-	if (swdp_ahb_read(ptr, &x)) goto fail;
-	if (x != LK_THREAD_MAGIC) goto fail;
-	if (swdp_ahb_read(LT_NEXT_PTR(di,ptr), &t->nextptr)) goto fail;
-	if (swdp_ahb_read(LT_STATE(di,ptr), &t->state)) goto fail;
-	if (swdp_ahb_read(LT_SAVED_SP(di,ptr), &t->saved_sp)) goto fail;
-	if (swdp_ahb_read(LT_WAITQ(di,ptr), &t->waitq)) goto fail;
-	if (swdp_ahb_read32(LT_NAME(di,ptr), (void*) t->name, 32 / 4)) goto fail;
-	t->name[31] = 0;
-	for (n = 0; n < 31; n++) {
-		if ((t->name[n] < ' ') || (t->name[n] > 127)) {
-			if (t->name[n] == 0) break;
-			t->name[n] = '.';
-		}
-	}
-	if (t->state > LK_MAX_STATE) t->state = LK_MAX_STATE + 1;
-	memset(t->regs, 0xee, sizeof(t->regs));
-	// lk arm-m context frame: R4 R5 R6 R7 R8 R9 R10 R11 LR
-	// if LR is FFFFFFxx then: R0 R1 R2 R3 R12 LR PC PSR
-	t->active = active;
-	if (!active) {
-		u32 fr[9];
-		if (swdp_ahb_read32(t->saved_sp, (void*) fr, 9)) goto fail;
-		memcpy(t->regs + 4, fr, 8 * sizeof(u32));
-		if ((fr[8] & 0xFFFFFF00) == 0xFFFFFF00) {
-			if (swdp_ahb_read32(t->saved_sp + 9 * sizeof(u32), (void*) fr, 8)) goto fail;
-			memcpy(t->regs + 0, fr, 4 * sizeof(u32));
-			t->regs[12] = fr[4];
-			t->regs[13] = t->saved_sp + 17 * sizeof(u32);
-			t->regs[14] = fr[5];
-			t->regs[15] = fr[6];
-			t->regs[16] = fr[7];
-		} else {
-			t->regs[13] = t->saved_sp + 9 * sizeof(u32);
-			t->regs[15] = fr[8];
-			t->regs[16] = 0x10000000;
-		}
-	}
-	return t;
-fail:
-	free(t);
-	return NULL;
-}
-
-void free_lk_threads(lkthread_t *list) {
-	lkthread_t *t, *next;
-	for (t = list; t != NULL; t = next) {
-		next = t->next;
-		free(t);
-	}
-}
-
-lkthread_t *find_lk_threads(int verbose) {
-	lkdebuginfo_t di;
-	lkthread_t *list = NULL;
-	lkthread_t *current = NULL;
-	lkthread_t *t;
-	u32 x;
-	u32 rtp;
-	if (swdp_ahb_read(DI_OFF_MAGIC, &x)) goto fail;
-	if (x != DI_MAGIC) {
-		if (verbose) xprintf("debuginfo: bad magic\n");
-		goto fail;
-	}
-	if (swdp_ahb_read(DI_OFF_PTR, &x)) goto fail;
-	if (x & 3) goto fail;
-	if (verbose) xprintf("debuginfo @ %08x\n", x);
-	if (swdp_ahb_read32(x, (void*) &di, sizeof(di) / 4)) goto fail;
-	if (verbose) {
-		xprintf("di %08x %08x %08x %d %d %d %d %d %d\n",
-			di.version, di.thread_list_ptr, di.current_thread_ptr,
-			di.off_list_node, di.off_state, di.off_saved_sp,
-			di.off_was_preempted, di.off_name, di.off_waitq);
-	}
-	if (di.version != 0x0100) {
-		if (verbose) xprintf("debuginfo: unsupported version\n");
-		goto fail;
-	}
-	if (swdp_ahb_read(di.current_thread_ptr, &x)) goto fail;
-	current = read_lk_thread(&di, x, 1);
-	rtp = di.thread_list_ptr;
-	for (;;) {
-		if (swdp_ahb_read(rtp + LIST_OFF_NEXT, &rtp)) goto fail;
-		if (rtp == di.thread_list_ptr) break;
-		x = LIST_TO_THREAD(&di, rtp);
-		if (current->threadptr == x) continue;
-		t = read_lk_thread(&di, x, 0);
-		if (t == NULL) goto fail;
-		t->next = list;
-		list = t;
-	}
-	current->next = list;
-	return current;
-fail:
-	if (current) free(current);
-	free_lk_threads(list);
-	return NULL;
-}
-
 void gdb_update_threads(struct gdbcnxn *gc) {
 	zprintf("GDB: sync threadlist\n");
 	free_lk_threads(gc->threadlist);
@@ -770,42 +593,36 @@ void handle_command(struct gdbcnxn *gc, unsigned char *cmd) {
 		swdp_core_halt();
 		gdb_update_threads(gc);
 		break;
-	case 'H':
+	case 'H': {
+		// select thread
+		lkthread_t *t = NULL;
 		if ((cmd[2] == '-') && (cmd[3] == '1')) {
-			zprintf("GDB: selected -1??\n");
+			t = gc->threadlist;
 		} else {
-			lkthread_t *t;
-			u32 n = strtoul((char*) cmd + 2, NULL, 16);
-			for (t = gc->threadlist; t != NULL; t = t->next) {
-				if (t->threadptr == n) {
-					zprintf("GDB: selected %c tptr=%x\n", cmd[1], n);
-					if (cmd[1] == 'g') gc->gselected = t;
-					if (cmd[1] == 'c') gc->cselected = t;
-					goto hdone;
-				}
+			n = strtoul((char*) cmd + 2, NULL, 16);
+			if ((t = find_lk_thread(gc->threadlist, n)) == NULL) {
+				t = gc->threadlist;
 			}
 		}
-		/* select thread - we've only got one */
-		if (cmd[1] == 'g') gc->gselected = gc->threadlist;
-		if (cmd[1] == 'c') gc->cselected = gc->threadlist;
-	hdone:
+		if (cmd[1] == 'g') {
+			gc->gselected = t;
+		} else if (cmd[1] == 'c') {
+			gc->cselected = t;
+		} else {
+			zprintf("GDB: selecting '%c' thread?!\n", cmd[1]);
+		}
 		gdb_puts(gc, "OK");
 		break;
+	}
 	// is thread alive?
-	case 'T': {
-		lkthread_t *t;
+	case 'T':
 		n = strtoul((char*) cmd + 1, NULL, 16);
-		for (t = gc->threadlist; t != NULL; t = t->next) {
-			if (t->threadptr == n) {
-				break;
-			}
-		}
-		if (t) {
+		if (find_lk_thread(gc->threadlist, n)) {
 			gdb_puts(gc, "OK");
 		} else {
 			gdb_puts(gc, "E00");
 		}
-	}	
+		break;
 	// m hexaddr , hexcount
 	// read from memory
 	case 'm':

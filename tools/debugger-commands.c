@@ -31,6 +31,7 @@
 #include "arm-v7m.h"
 
 #include "debugger.h"
+#include "lkdebug.h"
 
 #define _AGENT_HOST_ 1
 #include <agent/flash.h>
@@ -760,13 +761,10 @@ int do_maskints(int argc, param *argv) {
 	return 0;
 }
 
-typedef struct lkthread lkthread_t;
-lkthread_t *find_lk_threads(int verbose);
-void dump_lk_threads(lkthread_t *t);
-void free_lk_threads(lkthread_t *t);
-
 int do_threads(int argc, param *argv) {
-	lkthread_t *t = find_lk_threads(1);
+	lkthread_t *t;
+	swdp_core_halt();
+	t = find_lk_threads(1);
 	dump_lk_threads(t);
 	free_lk_threads(t);
 	return 0;

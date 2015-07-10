@@ -9,6 +9,7 @@ M_OBJS += tools/linenoise.o
 M_OBJS += tools/usb.o
 M_OBJS += tools/socket.o
 M_OBJS += tools/gdb-bridge.o
+M_OBJS += tools/lkdebug.o
 M_OBJS += out/debugger-builtins.o
 $(call build-host-executable)
 
