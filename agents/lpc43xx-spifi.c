@@ -120,6 +120,31 @@ static void spifi_sector_erase(u32 addr) {
 	spifi_wait_busy();
 }
 
+static int verify_erased(u32 addr, u32 count) {
+	int err = 0;
+	writel(addr, SPIFI_ADDR);
+	writel(CMD_DATALEN(count * 4) | CMD_FF_SERIAL | CMD_FR_OP_3B |
+		CMD_OPCODE(CMD_READ_DATA), SPIFI_CMD);
+	while (count-- > 0) {
+		if (readl(SPIFI_DATA) != 0xFFFFFFFF) err = -1;
+	}
+	while (readl(SPIFI_STAT) & STAT_CMD) ;
+	return err;
+}
+
+static int verify_page(u32 addr, u32 *ptr) {
+	int count = 256 / 5;
+	int err = 0;
+	writel(addr, SPIFI_ADDR);
+	writel(CMD_DATALEN(count * 4) | CMD_FF_SERIAL | CMD_FR_OP_3B |
+		CMD_OPCODE(CMD_READ_DATA), SPIFI_CMD);
+	while (count-- > 0) {
+		if (readl(SPIFI_DATA) != *ptr++) err = -1;
+	}
+	while (readl(SPIFI_STAT) & STAT_CMD) ;
+	return err;
+}
+
 // at reset-stop, all clocks are running from 12MHz internal osc
 // todo: run SPIFI_CLK at a much higher rate
 // todo: use 4bit modes
@@ -146,6 +171,9 @@ int flash_agent_erase(u32 flash_addr, u32 length) {
 	}
 	while (length != 0) {
 		spifi_sector_erase(flash_addr);
+		if (verify_erased(flash_addr, 0x1000/4)) {
+			return ERR_FAIL;
+		}
 		if (length < 0x1000) break;
 		length -= 0x1000;
 		flash_addr += 0x1000;
@@ -166,6 +194,9 @@ int flash_agent_write(u32 flash_addr, const void *data, u32 length) {
 			}
 		}
 		spifi_page_program(flash_addr, (void*) x, 256 / 4);
+		if (verify_page(flash_addr, (void*) x)) {
+			return ERR_FAIL;
+		}
 		if (length < 256) break;
 		length -= 256;
 		flash_addr += 256;
