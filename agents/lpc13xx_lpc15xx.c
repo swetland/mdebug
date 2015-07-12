@@ -103,4 +103,17 @@ int flash_agent_ioctl(u32 op, void *ptr, u32 arg0, u32 arg1) {
 	return ERR_INVALID;
 }
 
-
+const flash_agent __attribute((section(".vectors"))) FlashAgent = {
+	.magic =	AGENT_MAGIC,
+	.version =	AGENT_VERSION,
+	.flags =	FLAG_BOOT_ROM_HACK,
+	.load_addr =	CONFIG_LOADADDR,
+	.data_addr =	CONFIG_LOADADDR + 0x400,
+	.data_size =	0x1000,
+	.flash_addr =	CONFIG_FLASHADDR,
+	.flash_size =	CONFIG_FLASHSIZE,
+	.setup =	flash_agent_setup,
+	.erase =	flash_agent_erase,
+	.write =	flash_agent_write,
+	.ioctl =	flash_agent_ioctl,
+};

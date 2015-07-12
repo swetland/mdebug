@@ -52,6 +52,7 @@ mv $1.tmp $1
 endef
 
 start-module-mk = $(eval M_MAKEFILE := $(lastword $(MAKEFILE_LIST)))
+build-target-agent = $(eval include build/target-agent.mk)
 build-target-executable = $(eval include build/target-executable.mk)
 build-host-executable = $(eval include build/host-executable.mk)
 

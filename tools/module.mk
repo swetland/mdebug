@@ -13,7 +13,6 @@ M_OBJS += tools/lkdebug.o
 M_OBJS += out/debugger-builtins.o
 $(call build-host-executable)
 
-AGENTS := out/agent-lpc13xx.bin out/agent-lpc15xx.bin out/agent-stm32f4xx.bin
 out/debugger-builtins.c: $(AGENTS) bin/mkbuiltins
 	@mkdir -p out
 	./bin/mkbuiltins $(AGENTS) > $@	

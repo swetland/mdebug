@@ -61,6 +61,7 @@ OUT_TARGET_OBJ := $(OUT)/_obj/target
 
 ALL :=
 DEPS :=
+AGENTS :=
 
 # build system internals
 include build/build.mk
