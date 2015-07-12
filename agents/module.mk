@@ -24,3 +24,10 @@ M_RAMSIZE := 0x00000400
 M_OBJS := agents/stm32fxxx.o
 $(call build-target-agent)
 
+M_NAME := agent-lpclink2
+M_ROMBASE := 0x00000000
+M_ROMSIZE := 0x00100000
+M_RAMBASE := 0x10080400
+M_RAMSIZE := 0x10000400
+M_OBJS := agents/lpc43xx-spifi.o
+$(call build-target-agent)
