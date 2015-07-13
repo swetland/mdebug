@@ -169,6 +169,7 @@ lkthread_t *find_lk_threads(int verbose) {
 	}
 	if (swdp_ahb_read(di.current_thread_ptr, &x)) goto fail;
 	current = read_lk_thread(&di, x, 1);
+	if (current == NULL) goto fail;
 	rtp = di.thread_list_ptr;
 	for (;;) {
 		if (swdp_ahb_read(rtp + LIST_OFF_NEXT, &rtp)) goto fail;
