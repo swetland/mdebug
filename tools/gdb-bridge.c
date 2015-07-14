@@ -588,7 +588,7 @@ void handle_command(struct gdbcnxn *gc, unsigned char *cmd) {
 	gdb_prologue(gc);
 	switch (cmd[0]) {
 	case '?':
-		gdb_puts(gc, "S00");
+		gdb_puts(gc, "S05");
 		gc->flags &= (~F_RUNNING);
 		swdp_core_halt();
 		gdb_update_threads(gc);
@@ -722,7 +722,7 @@ void handle_command(struct gdbcnxn *gc, unsigned char *cmd) {
 		swdp_core_halt();
 		gdb_update_threads(gc);
 		gc->flags &= (~F_RUNNING);
-		gdb_puts(gc, "S00");
+		gdb_puts(gc, "S05");
 		break;
 	// extended query and set commands
 	case 'q': 
@@ -824,7 +824,7 @@ void gdb_server(int fd) {
 					gc.flags &= (~F_RUNNING);
 					// todo: indicate specific halt reason
 					gdb_prologue(&gc);
-					gdb_puts(&gc, "S00");
+					gdb_puts(&gc, "S05");
 					gdb_epilogue(&gc);
 					gdb_update_threads(&gc);
 				}
