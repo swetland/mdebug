@@ -762,6 +762,15 @@ int do_maskints(int argc, param *argv) {
 }
 
 int do_threads(int argc, param *argv) {
+	if (argc == 1) {
+		if (strcmp(argv[0].s, "clear")) {
+			xprintf("usage: threads [clear]\n");
+			return -1;
+		}
+		swdp_core_halt();
+		clear_lk_threads();
+		return 0;
+	}
 	lkthread_t *t;
 	swdp_core_halt();
 	t = find_lk_threads(1);

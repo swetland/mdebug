@@ -141,6 +141,38 @@ void free_lk_threads(lkthread_t *list) {
 	}
 }
 
+static int load_debuginfo(lkdebuginfo_t *di, int verbose) {
+	u32 x;
+	if (swdp_ahb_read(DI_OFF_MAGIC, &x)) return -1;
+	if (x != DI_MAGIC) {
+		if (verbose) xprintf("debuginfo: bad magic\n");
+		return -1;
+	}
+	if (swdp_ahb_read(DI_OFF_PTR, &x)) return -1;
+	if (x & 3) return -1;
+	if (verbose) xprintf("debuginfo @ %08x\n", x);
+	if (swdp_ahb_read32(x, (void*) di, sizeof(lkdebuginfo_t) / 4)) return -1;
+	if (verbose) {
+		xprintf("di %08x %08x %08x %d %d %d %d %d %d\n",
+			di->version, di->thread_list_ptr, di->current_thread_ptr,
+			di->off_list_node, di->off_state, di->off_saved_sp,
+			di->off_was_preempted, di->off_name, di->off_waitq);
+	}
+	if (di->version != 0x0100) {
+		if (verbose) xprintf("debuginfo: unsupported version\n");
+		return -1;
+	}
+	return 0;
+}
+
+void clear_lk_threads(void) {
+	lkdebuginfo_t di;
+	if (load_debuginfo(&di, 0)) return;
+	swdp_ahb_write(di.current_thread_ptr, 0xffffffff);
+	swdp_ahb_write(di.thread_list_ptr + 0, 0xffffffff);
+	swdp_ahb_write(di.thread_list_ptr + 4, 0xffffffff);
+}
+
 lkthread_t *find_lk_threads(int verbose) {
 	lkdebuginfo_t di;
 	lkthread_t *list = NULL;
@@ -148,25 +180,7 @@ lkthread_t *find_lk_threads(int verbose) {
 	lkthread_t *t;
 	u32 x;
 	u32 rtp;
-	if (swdp_ahb_read(DI_OFF_MAGIC, &x)) goto fail;
-	if (x != DI_MAGIC) {
-		if (verbose) xprintf("debuginfo: bad magic\n");
-		goto fail;
-	}
-	if (swdp_ahb_read(DI_OFF_PTR, &x)) goto fail;
-	if (x & 3) goto fail;
-	if (verbose) xprintf("debuginfo @ %08x\n", x);
-	if (swdp_ahb_read32(x, (void*) &di, sizeof(di) / 4)) goto fail;
-	if (verbose) {
-		xprintf("di %08x %08x %08x %d %d %d %d %d %d\n",
-			di.version, di.thread_list_ptr, di.current_thread_ptr,
-			di.off_list_node, di.off_state, di.off_saved_sp,
-			di.off_was_preempted, di.off_name, di.off_waitq);
-	}
-	if (di.version != 0x0100) {
-		if (verbose) xprintf("debuginfo: unsupported version\n");
-		goto fail;
-	}
+	if (load_debuginfo(&di, verbose)) goto fail;
 	if (swdp_ahb_read(di.current_thread_ptr, &x)) goto fail;
 	current = read_lk_thread(&di, x, 1);
 	if (current == NULL) goto fail;

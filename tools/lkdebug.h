@@ -40,4 +40,9 @@ void free_lk_threads(lkthread_t *list);
 lkthread_t *find_lk_thread(lkthread_t *list, u32 tptr);
 void get_lk_thread_name(lkthread_t *t, char *out, size_t max);
 
+// Invalidate current thread and threadlist
+// Intended for use after target reset, etc.
+// Will corrupt a running image.
+void clear_lk_threads(void);
+
 #endif
