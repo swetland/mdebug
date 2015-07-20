@@ -313,57 +313,6 @@ int do_db(int argc, param *argv) {
 	return 0;
 }
 
-int do_download(int argc, param *argv) {
-	u32 addr;
-	u8 data[512*1024];
-#if 0
-	u8 vrfy[512*1024];
-#endif
-	int fd, r;
-
-	long long t0, t1;
-
-	if (argc != 2) {
-		xprintf("error: usage: download <file> <addr>\n");
-		return -1;
-	}
-
-	fd = open(argv[0].s, O_RDONLY);
-	r = read(fd, data, sizeof(data));
-	if ((fd < 0) || (r < 0)) {
-		xprintf("error: cannot read '%s'\n", argv[0].s);
-		return -1;
-	}
-	r = (r + 3) & ~3;
-	addr = argv[1].n;
-
-	xprintf("sending %d bytes...\n", r);
-	t0 = now();
-	if (swdp_ahb_write32(addr, (void*) data, r / 4)) {
-		xprintf("error: failed to write data\n");
-		return -1;
-	}
-	t1 = now();
-	xprintf("%lld uS -> %lld B/s\n", (t1 - t0), 
-		(((long long)r) * 1000000LL) / (t1 - t0));
-
-#if 0
-	t0 = now();
-	if (swdp_ahb_read32(addr, (void*) vrfy, r / 4)) {
-		xprintf("error: verify read failed\n");
-		return -1;
-	}
-	t1 = now();
-	xprintf("%lld uS. %lld B/s.\n", (t1 - t0), 
-		(((long long)r) * 1000000LL) / (t1 - t0));
-	if (memcmp(data,vrfy,r)) {
-		xprintf("error: verify failed\n");
-		return -1;
-	}
-#endif
-	return 0;
-}
-
 // vector catch flags to apply
 u32 vcflags = DEMCR_VC_HARDERR | DEMCR_VC_BUSERR | DEMCR_VC_STATERR | DEMCR_VC_CHKERR;
 
@@ -473,6 +422,71 @@ fail:
 	if (fd >= 0) close(fd);
 	return NULL;
 }
+
+int do_download(int argc, param *argv) {
+	u32 addr;
+	void *data;
+	size_t sz;
+	long long t0, t1;
+
+	if (argc != 2) {
+		xprintf("error: usage: download <file> <addr>\n");
+		return -1;
+	}
+
+	if ((data = load_file(argv[0].s, &sz)) == NULL) {
+		xprintf("error: cannot read '%s'\n", argv[0].s);
+		return -1;
+	}
+	sz = (sz + 3) & ~3;
+	addr = argv[1].n;
+
+	xprintf("sending %d bytes...\n", sz);
+	t0 = now();
+	if (swdp_ahb_write32(addr, (void*) data, sz / 4)) {
+		xprintf("error: failed to write data\n");
+		free(data);
+		return -1;
+	}
+	t1 = now();
+	xprintf("%lld uS -> %lld B/s\n", (t1 - t0), 
+		(((long long)sz) * 1000000LL) / (t1 - t0));
+	free(data);
+	return 0;
+}
+
+int do_run(int argc, param *argv) {
+	u32 addr;
+	void *data;
+	size_t sz;
+	u32 sp, pc;
+	if (argc != 2) {
+		xprintf("error: usage: run <file> <addr>\n");
+		return -1;
+	}
+	if ((data = load_file(argv[0].s, &sz)) == NULL) {
+		xprintf("error: cannot read '%s'\n", argv[0].s);
+		return -1;
+	}
+	swdp_core_halt();
+	sz = (sz + 3) & ~3;
+	addr = argv[1].n;
+	if (swdp_ahb_write32(addr, (void*) data, sz / 4)) {
+		xprintf("error: failed to write data\n");
+		free(data);
+		return -1;
+	}
+	memcpy(&sp, data, 4);
+	memcpy(&pc, ((char*) data) + 4, 4);
+	swdp_core_write(13, sp);
+	swdp_core_write(15, pc);
+	swdp_ahb_write(0xe000ed0c, 0x05fa0002);
+	swdp_core_write(16, 0x01000000);
+	swdp_core_resume();
+	free(data);
+	return 0;
+}
+
 
 void *load_agent(const char *arch, size_t *_sz) {
 	void *data;
@@ -792,6 +806,7 @@ struct debugger_command debugger_commands[] = {
 	{ "dr",		"", do_dr,		"dump register" },
 	{ "wr",		"", do_wr,		"write register" },
 	{ "download",	"", do_download,	"download file to device" },
+	{ "run",	"", do_run,		"download file and execute it" },
 	{ "flash",	"", do_flash,		"write file to device flash" },
 	{ "erase",	"", do_erase,		"erase flash" },
 	{ "reset",	"", do_reset,		"reset target" },
