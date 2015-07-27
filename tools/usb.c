@@ -87,6 +87,16 @@ void usb_close(usb_handle *usb) {
 	free(usb);
 }
 
+int usb_ctrl(usb_handle *usb, void *data,
+	uint8_t typ, uint8_t req, uint16_t val, uint16_t idx, uint16_t len) {
+	int r = libusb_control_transfer(usb->dev, typ, req, val, idx, data, len, 5000);
+	if (r < 0) {
+		return -1;
+	} else {
+		return r;
+	}
+}
+
 int usb_read(usb_handle *usb, void *data, int len) {
 	int xfer = len;
 	int r = libusb_bulk_transfer(usb->dev, usb->ei, data, len, &xfer, 5000);
