@@ -133,7 +133,7 @@ static int verify_erased(u32 addr, u32 count) {
 }
 
 static int verify_page(u32 addr, u32 *ptr) {
-	int count = 256 / 5;
+	int count = 256 / 4;
 	int err = 0;
 	writel(addr, SPIFI_ADDR);
 	writel(CMD_DATALEN(count * 4) | CMD_FF_SERIAL | CMD_FR_OP_3B |
