@@ -161,6 +161,9 @@ int main(int argc, char **argv) {
 	if (!strcmp(argv[1],"flash")) {
 		dl = 1;
 		cmd[1] = 'W';
+	} else if (!strcmp(argv[1],"flash:boot")) {
+		dl = 1;
+		cmd[1] = 'w';
 	} else if (!strcmp(argv[1],"boot")) {
 		dl = 1;
 		cmd[1] = 'X';
@@ -195,7 +198,7 @@ int main(int argc, char **argv) {
 	if (dfu) {
 		return dfu_download(buf + 256, sz);
 	}
-	for (;;) {		
+	for (;;) {
 		usb = usb_open(0x18d1, 0xdb00, 0);
 		if (usb == 0) {
 			if (once) {
