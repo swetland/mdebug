@@ -106,6 +106,15 @@ int usb_read(usb_handle *usb, void *data, int len) {
 	return xfer;
 }
 
+int usb_read_forever(usb_handle *usb, void *data, int len) {
+	int xfer = len;
+	int r = libusb_bulk_transfer(usb->dev, usb->ei, data, len, &xfer, 0);
+	if (r < 0) {
+		return -1;
+	}
+	return xfer;
+}
+
 int usb_write(usb_handle *usb, const void *data, int len) {
 	int xfer = len;
 	int r = libusb_bulk_transfer(usb->dev, usb->eo, (void*) data, len, &xfer, 5000);
