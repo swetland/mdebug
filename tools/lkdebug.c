@@ -143,12 +143,15 @@ void free_lk_threads(lkthread_t *list) {
 
 static int load_debuginfo(lkdebuginfo_t *di, int verbose) {
 	u32 x;
-	if (swdp_ahb_read(DI_OFF_MAGIC, &x)) return -1;
+	u32 vtbl;
+	//read Vector Table Offset Register
+	if (swdp_ahb_read(0xE000ED08, &vtbl)) vtbl = 0;
+	if (swdp_ahb_read((DI_OFF_MAGIC + vtbl), &x)) return -1;
 	if (x != DI_MAGIC) {
 		if (verbose) xprintf("debuginfo: bad magic\n");
 		return -1;
 	}
-	if (swdp_ahb_read(DI_OFF_PTR, &x)) return -1;
+	if (swdp_ahb_read((DI_OFF_PTR + vtbl), &x)) return -1;
 	if (x & 3) return -1;
 	if (verbose) xprintf("debuginfo @ %08x\n", x);
 	if (swdp_ahb_read32(x, (void*) di, sizeof(lkdebuginfo_t) / 4)) return -1;
