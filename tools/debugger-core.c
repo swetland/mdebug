@@ -307,7 +307,7 @@ static int do_set(int argc, param *argv) {
 			return -1;
 		}
 		variable_set(name, n);
-	} else {	
+	} else {
 		variable_set(name, argv[1].n);
 	}
 	return 0;
@@ -339,7 +339,7 @@ static int parse_number(const char *in, unsigned *out) {
 		if (read_memory_word(base + index, &value))
 			return -1;
 		*out = value;
-		return 0;	
+		return 0;
 	}
 
 	/* handle local $[0..9] and global $... variables */

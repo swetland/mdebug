@@ -59,7 +59,7 @@ usb_handle *usb_open(unsigned vid, unsigned pid, unsigned ifc) {
 	default:
 		goto fail;
 	}
-		
+
 	usb->dev = libusb_open_device_with_vid_pid(usb_ctx, vid, pid);
 	if (usb->dev == NULL) {
 		goto fail;
@@ -72,7 +72,7 @@ usb_handle *usb_open(unsigned vid, unsigned pid, unsigned ifc) {
 		fprintf(stderr, "failed to claim interface #%d\n", ifc);
 		goto close_fail;
 	}
-	
+
 	return usb;
 
 close_fail:

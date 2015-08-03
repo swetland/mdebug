@@ -20,6 +20,8 @@
 #include <unistd.h>
 #include <string.h>
 
+#include <pthread.h>
+
 #include "usb.h"
 
 #include <fw/types.h>
@@ -87,7 +89,7 @@ static void process_async(u32 *data, unsigned count) {
 		default:
 			return;
 		}
-	}	
+	}
 }
 
 static int process_reply(struct txn *t, u32 *data, int count) {
@@ -144,7 +146,7 @@ static int q_exec(struct txn *t) {
 	t->magic = 0;
 
 	/* If we are a multiple of 64, and not exactly 4K,
-	 * add padding to ensure the target can detect the end of txn 
+	 * add padding to ensure the target can detect the end of txn
 	 */
 	if (((t->txc % 16) == 0) && (t->txc != MAXWORDS))
 		t->tx[t->txc++] = RSWD_MSG(CMD_NULL, 0, 0);
@@ -632,7 +634,7 @@ int swdp_set_clock(unsigned khz) {
 	t.tx[t.txc++] = RSWD_MSG(CMD_SET_CLOCK, 0, khz);
 	return q_exec(&t);
 }
-	
+
 int swdp_open(void) {
 	usb = usb_open(0x18d1, 0xdb03, 0);
 	if (usb == 0) {
