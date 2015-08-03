@@ -36,9 +36,29 @@ void swdp_interrupt(void) {
 	if (write(2, "\b\b*INTERRUPT*\n", 16)) { /* do nothing */ }
 }
 
-static u16 sequence = 1;
+static pthread_mutex_t swd_lock = PTHREAD_MUTEX_INITIALIZER;
+static pthread_cond_t swd_event = PTHREAD_COND_INITIALIZER;
+static pthread_t swd_thread;
 
-static usb_handle *usb;
+// these are all protected by swd_lock
+static u16 sequence = 1;
+static int swd_online = 0;
+static usb_handle *usb = NULL;
+
+static unsigned swd_txn_id = 0;
+static void *swd_txn_data = NULL;
+static int swd_txn_status = 0;
+
+#define TXN_STATUS_WAIT		-2
+#define TXN_STATUS_FAIL		-1
+
+// swd_thread is responsible for setting swd_online to 1 once
+// the USB connection is active.
+//
+// In the event of a usb connection error, swd_thread sets
+// swd_online to -1, and the next swd io attempt must acknowledge
+// this by zeroing the usb handle and setting swd_online to 0
+// at which point the swd_thread may attempt to reconnect.
 
 static int swd_error = 0;
 
@@ -135,7 +155,7 @@ static int process_reply(struct txn *t, u32 *data, int count) {
 
 static int q_exec(struct txn *t) {
 	unsigned data[1028];
-	unsigned seq = sequence++;
+	unsigned seq;
 	int r;
 	u32 id;
 
@@ -151,33 +171,102 @@ static int q_exec(struct txn *t) {
 	if (((t->txc % 16) == 0) && (t->txc != MAXWORDS))
 		t->tx[t->txc++] = RSWD_MSG(CMD_NULL, 0, 0);
 
+	pthread_mutex_lock(&swd_lock);
+ 	seq = sequence++;
 	id = RSWD_TXN_START(seq);
 	t->tx[0] = id;
 
-	r = usb_write(usb, t->tx, t->txc * sizeof(u32));
-	if (r != (t->txc * sizeof(u32))) {
-		fprintf(stderr,"invoke: tx error\n");
+	if (swd_online != 1) {
+		if (swd_online == -1) {
+			// ack disconnect
+			usb_close(usb);
+			usb = NULL;
+			swd_online = 0;
+			pthread_cond_broadcast(&swd_event);
+		}
+		r = -1;
+	} else {
+		r = usb_write(usb, t->tx, t->txc * sizeof(u32));
+		if (r == (t->txc * sizeof(u32))) {
+			swd_txn_id = id;
+			swd_txn_data = data;
+			swd_txn_status = TXN_STATUS_WAIT;
+			do {
+				pthread_cond_wait(&swd_event, &swd_lock);
+			} while (swd_txn_status == TXN_STATUS_WAIT);
+			if (swd_txn_status == TXN_STATUS_FAIL) {
+				r = -1;
+			} else {
+				r = swd_txn_status;
+			}
+			swd_txn_data = NULL;
+		} else {
+			r = -1;
+		}
+	}
+	pthread_mutex_unlock(&swd_lock);
+	if (r > 0) {
+		return process_reply(t, data + 1, (r / 4) - 1);
+	} else {
 		return -1;
 	}
-	for (;;) {
-		r = usb_read(usb, data, 4096);
-		if (r <= 0) {
-			fprintf(stderr,"invoke: rx error\n");
-			return -1;
-		}
-		if (r & 3) {
-			fprintf(stderr,"invoke: framing error\n");
-			return -1;
-		}
+}
 
-		if (data[0] == id) {
-			return process_reply(t, data + 1, (r / 4) - 1);
-		} else if (data[0] == RSWD_TXN_ASYNC) {
-			process_async(data + 1, (r / 4) - 1);
-		} else {
-			fprintf(stderr,"invoke: unexpected txn %08x (%d)\n", data[0], r);
+static void *swd_reader(void *arg) {
+	unsigned data[1024];
+	int r;
+	int once = 1;
+restart:
+	for (;;) {
+		if ((usb = usb_open(0x18d1, 0xdb03, 0))) break;
+		if ((usb = usb_open(0x18d1, 0xdb04, 0))) break;
+		if (once) {
+			fprintf(stderr, "\r\nusb: waiting for debugger device\r\n");
+			once = 0;
+		}
+		usleep(250000);
+	}
+	fprintf(stderr, "\r\nusb: debugger connected\r\n");
+	pthread_mutex_lock(&swd_lock);
+	swd_online = 1;
+	for (;;) {
+		pthread_mutex_unlock(&swd_lock);
+		r = usb_read_forever(usb, data, 4096);
+		pthread_mutex_lock(&swd_lock);
+		if (r < 0) {
+			fprintf(stderr,"\r\nusb: debugger disconnected\r\n");
+			swd_online = -1;
+			swd_txn_status = TXN_STATUS_FAIL;
+			pthread_cond_broadcast(&swd_event);
+			break;
+		}
+		if ((r < 4) || (r & 3)) {
+			fprintf(stderr,"\r\nusb: rx: discard packet (%d)\r\n", r);
+			continue;
+		}
+		if (swd_txn_status == TXN_STATUS_WAIT) {
+			if (data[0] == swd_txn_id) {
+				swd_txn_status = r;
+				memcpy(swd_txn_data, data, r);
+				pthread_cond_broadcast(&swd_event);
+			} else if (data[0] == RSWD_TXN_ASYNC) {
+				pthread_mutex_unlock(&swd_lock);
+				process_async(data + 1, (r / 4) - 1);
+				pthread_mutex_lock(&swd_lock);
+			} else {
+				fprintf(stderr, "\r\nusb: rx: unexpected txn %08x (%d)\r\n",
+					data[0], r);
+			}
 		}
 	}
+	// wait for a reader to ack the shutdown (and close usb)
+	while (swd_online == -1) {
+		pthread_cond_wait(&swd_event, &swd_lock);
+	}
+	pthread_mutex_unlock(&swd_lock);
+	usleep(250000);
+	goto restart;
+	return NULL;
 }
 
 static void q_check(struct txn *t, int n) {
@@ -185,7 +274,6 @@ static void q_check(struct txn *t, int n) {
 		fprintf(stderr,"FATAL: txn buffer overflow\n");
 		exit(1);
 	}
-
 }
 
 static void q_init(struct txn *t) {
@@ -636,16 +724,6 @@ int swdp_set_clock(unsigned khz) {
 }
 
 int swdp_open(void) {
-	usb = usb_open(0x18d1, 0xdb03, 0);
-	if (usb == 0) {
-		usb = usb_open(0x18d1, 0xdb04, 0);
-	}
-	if (usb == 0) {
-		fprintf(stderr,"could not find device\n");
-		return -1;
-	}
-
-	swdp_enable_tracing(0);
-	swdp_reset();
+	pthread_create(&swd_thread, NULL, swd_reader, NULL);
 	return 0;
 }
