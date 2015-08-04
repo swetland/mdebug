@@ -1,4 +1,4 @@
-/* debugger-commands.c
+/* debugger-commands.);
  *
  * Copyright 2011 Brian Swetland <swetland@frotz.net>
  * 
@@ -69,7 +69,7 @@ int disassemble(u32 addr) {
 		r = disassemble_thumb2(addr, mem.h[0], mem.h[1], text, 128);
 	}
 	if (r > 0)
-		xprintf("%s\n", text);
+		xprintf(XDATA, "%s\n", text);
 	return r;
 #else
 	return -1;
@@ -91,16 +91,16 @@ int do_regs(int argc, param *argv) {
 	if (swdp_core_read_all(lastregs))
 		return -1;
 
-	xprintf("r0 %08x r4 %08x r8 %08x ip %08x psr %08x\n",
+	xprintf(XDATA, "r0 %08x r4 %08x r8 %08x ip %08x psr %08x\n",
 		lastregs[0], lastregs[4], lastregs[8],
 		lastregs[12], lastregs[16]);
-	xprintf("r1 %08x r5 %08x r9 %08x sp %08x msp %08x\n",
+	xprintf(XDATA, "r1 %08x r5 %08x r9 %08x sp %08x msp %08x\n",
 		lastregs[1], lastregs[5], lastregs[9],
 		lastregs[13], lastregs[17]);
-	xprintf("r2 %08x r6 %08x 10 %08x lr %08x psp %08x\n",
+	xprintf(XDATA, "r2 %08x r6 %08x 10 %08x lr %08x psp %08x\n",
 		lastregs[2], lastregs[6], lastregs[10],
 		lastregs[14], lastregs[18]);
-	xprintf("r3 %08x r7 %08x 11 %08x pc %08x\n",
+	xprintf(XDATA, "r3 %08x r7 %08x 11 %08x pc %08x\n",
 		lastregs[3], lastregs[7], lastregs[11],
 		lastregs[15]);
 	disassemble(lastregs[15]);
@@ -125,13 +125,11 @@ int do_step(int argc, param *argv) {
 			swdp_core_step();
 			swdp_core_wait_for_halt();
 			if (swdp_core_read(15, &pc)) {
-				xprintf("error\n");
+				xprintf(XCORE, "step: error\n");
 				return -1;
 			}
-			xprintf(".");
 			fflush(stdout);
 		} while (pc != argv[0].n);
-		xprintf("\n");
 	} else {
 		swdp_core_step();
 		swdp_core_wait_for_halt();
@@ -189,12 +187,12 @@ int do_dr(int argc, param *argv) {
 	for (n = 0; n < (sizeof(core_regmap) / sizeof(core_regmap[0])); n++) {
 		if (!strcasecmp(argv[0].s, core_regmap[n].name)) {
 			swdp_core_read(core_regmap[n].n, &x);
-			xprintf("%s: %08x\n", argv[0].s, x);
+			xprintf(XDATA, "%s: %08x\n", argv[0].s, x);
 			return 0;
 		}
 	}
 	swdp_ahb_read(argv[0].n, &x);
-	xprintf("%08x: %08x\n", argv[0].n, x);
+	xprintf(XDATA, "%08x: %08x\n", argv[0].n, x);
 	return 0;
 }
 
@@ -205,12 +203,12 @@ int do_wr(int argc, param *argv) {
 	for (n = 0; n < (sizeof(core_regmap) / sizeof(core_regmap[0])); n++) {
 		if (!strcasecmp(argv[0].s, core_regmap[n].name)) {
 			swdp_core_write(core_regmap[n].n, argv[1].n);
-			xprintf("%s<<%08x\n", argv[0].s, argv[1].n);
+			xprintf(XDATA, "%s<<%08x\n", argv[0].s, argv[1].n);
 			return 0;
 		}
 	}
 	swdp_ahb_write(argv[0].n, argv[1].n);
-	xprintf("%08x<<%08x\n", argv[0].n, argv[1].n);
+	xprintf(XDATA, "%08x<<%08x\n", argv[0].n, argv[1].n);
 	return 0;
 }
 
@@ -222,7 +220,7 @@ int do_text(int argc, param *argv) {
 		return -1;
 	addr = argv[0].n;
 	memset(data, 0, sizeof(data));
-	
+
 	if (swdp_ahb_read32(addr, (void*) data, sizeof(data)/4))
 		return -1;
 
@@ -234,7 +232,7 @@ int do_text(int argc, param *argv) {
 			continue;
 		*x = '.';
 	}
-	fprintf(stderr,"%s\n", (char*) data);
+	xprintf(XDATA, "%08x: %s\n", addr, (char*) data);
 	return 0;
 }
 
@@ -264,12 +262,30 @@ int do_dw(int argc, param *argv) {
 	count /= 4;
 	if (swdp_ahb_read32(addr, data, count))
 		return -1;
-	for (n = 0; n < count; n++) {
-		if ((n & 3) == 0)
-			xprintf("\n%08x:", addr + (n << 2));
-		xprintf(" %08x", data[n]);
+
+	for (n = 0; count > 0; n += 4, addr += 16) {
+		switch (count) {
+		case 1:
+			count = 0;
+			xprintf(XDATA, "%08x: %08x\n", addr, data[n]);
+			break;
+		case 2:
+			count = 0;
+			xprintf(XDATA, "%08x: %08x %08x\n",
+				addr, data[n], data[n+1]);
+			break;
+		case 3:
+			count = 0;
+			xprintf(XDATA, "%08x: %08x %08x %08x\n",
+				addr, data[n], data[n+1], data[n+2]);
+			break;
+		default:
+			count -= 4;
+			xprintf(XDATA, "%08x: %08x %08x %08x %08x\n",
+				addr, data[n], data[n+1], data[n+2], data[n+3]);
+			break;
+		}
 	}
-	xprintf("\n");
 	return 0;
 }
 
@@ -277,7 +293,8 @@ int do_dw(int argc, param *argv) {
 int do_db(int argc, param *argv) {
 	u32 addr, count;
 	u8 data[1024];
-	unsigned n;
+	char line[256];
+	unsigned n, m, xfer;
 
 	if (argc < 2)
 		return -1;
@@ -289,7 +306,7 @@ int do_db(int argc, param *argv) {
 		count = 1024;
 
 	memset(data, 0xee, 1024);
-
+	// todo: fix this
 	swdp_ahb_write(AHB_CSW, AHB_CSW_MDEBUG | AHB_CSW_PRIV |
 		AHB_CSW_DBG_EN | AHB_CSW_8BIT);
 	for (n = 0; n < count; n++) {
@@ -300,16 +317,17 @@ int do_db(int argc, param *argv) {
 		}
 		data[n] = tmp >> (8 * (n & 3));
 	}
-
 	swdp_ahb_write(AHB_CSW, AHB_CSW_MDEBUG | AHB_CSW_PRIV |
 		AHB_CSW_DBG_EN | AHB_CSW_32BIT);
 
-	for (n = 0; n < count; n++) {
-		if ((n & 15) == 0)
-			xprintf("\n%08x:", addr + n);
-		xprintf(" %02x", data[n]);
+	for (n = 0; count > 0; count -= xfer) {
+		xfer = (count > 16) ? 16 : count;
+		char *p = line + sprintf(line, "%08x:", addr + n);
+		for (m = 0; m < xfer; m++) {
+			p += sprintf(p, " %02x", data[n++]);
+		}
+		xprintf(XDATA, "%s\n", line);
 	}
-	xprintf("\n");
 	return 0;
 }
 
@@ -317,7 +335,7 @@ int do_db(int argc, param *argv) {
 u32 vcflags = DEMCR_VC_HARDERR | DEMCR_VC_BUSERR | DEMCR_VC_STATERR | DEMCR_VC_CHKERR;
 
 int do_reset(int argc, param *argv) {
-	swdp_core_halt();	
+	swdp_core_halt();
 	swdp_ahb_write(DEMCR, DEMCR_TRCENA | vcflags);
 	/* core reset and sys reset */
 	swdp_ahb_write(0xe000ed0c, 0x05fa0005);
@@ -363,8 +381,7 @@ int do_watch_off(int argc, param *argv) {
 
 int do_print(int argc, param *argv) {
 	while (argc-- > 0)
-		xprintf("%08x ", argv++[0].n);
-	xprintf("\n");
+		xprintf(XCORE, "%08x\n", argv++[0].n);
 	return 0;
 }
 
@@ -374,12 +391,11 @@ int do_echo(int argc, param *argv) {
 		const char *arg = argv++[0].s;
 
 		if (arg[0] == '$') {
-			xprintf("%08x ", argn);
+			xprintf(XCORE, "%08x\n", argn);
 		} else {
-			xprintf("%s ", arg, argn);
+			xprintf(XCORE, "%s\n", arg);
 		}
 	}
-	xprintf("\n");
 	return 0;
 }
 
@@ -396,7 +412,7 @@ int do_setclock(int argc, param *argv) {
 int do_help(int argc, param *argv) {
 	struct debugger_command *cmd;
 	for (cmd = debugger_commands; cmd->func != NULL; cmd++) {
-		xprintf("%-16s: %s\n", cmd->name, cmd->help);
+		xprintf(XCORE, "%-16s: %s\n", cmd->name, cmd->help);
 	}
 
 	return 0;
@@ -430,26 +446,26 @@ int do_download(int argc, param *argv) {
 	long long t0, t1;
 
 	if (argc != 2) {
-		xprintf("error: usage: download <file> <addr>\n");
+		xprintf(XCORE, "error: usage: download <file> <addr>\n");
 		return -1;
 	}
 
 	if ((data = load_file(argv[0].s, &sz)) == NULL) {
-		xprintf("error: cannot read '%s'\n", argv[0].s);
+		xprintf(XCORE, "error: cannot read '%s'\n", argv[0].s);
 		return -1;
 	}
 	sz = (sz + 3) & ~3;
 	addr = argv[1].n;
 
-	xprintf("sending %d bytes...\n", sz);
+	xprintf(XCORE, "sending %d bytes...\n", sz);
 	t0 = now();
 	if (swdp_ahb_write32(addr, (void*) data, sz / 4)) {
-		xprintf("error: failed to write data\n");
+		xprintf(XCORE, "error: failed to write data\n");
 		free(data);
 		return -1;
 	}
 	t1 = now();
-	xprintf("%lld uS -> %lld B/s\n", (t1 - t0), 
+	xprintf(XCORE, "%lld uS -> %lld B/s\n", (t1 - t0), 
 		(((long long)sz) * 1000000LL) / (t1 - t0));
 	free(data);
 	return 0;
@@ -461,18 +477,18 @@ int do_run(int argc, param *argv) {
 	size_t sz;
 	u32 sp, pc;
 	if (argc != 2) {
-		xprintf("error: usage: run <file> <addr>\n");
+		xprintf(XCORE, "error: usage: run <file> <addr>\n");
 		return -1;
 	}
 	if ((data = load_file(argv[0].s, &sz)) == NULL) {
-		xprintf("error: cannot read '%s'\n", argv[0].s);
+		xprintf(XCORE, "error: cannot read '%s'\n", argv[0].s);
 		return -1;
 	}
 	swdp_core_halt();
 	sz = (sz + 3) & ~3;
 	addr = argv[1].n;
 	if (swdp_ahb_write32(addr, (void*) data, sz / 4)) {
-		xprintf("error: failed to write data\n");
+		xprintf(XCORE, "error: failed to write data\n");
 		free(data);
 		return -1;
 	}
@@ -536,7 +552,7 @@ int invoke(u32 agent, u32 func, u32 r0, u32 r1, u32 r2, u32 r3) {
 
 	// todo: readback and verify?
 
-	xprintf("invoke <func@%08x>(0x%x,0x%x,0x%x,0x%x)\n", func, r0, r1, r2, r3);
+	xprintf(XCORE, "invoke <func@%08x>(0x%x,0x%x,0x%x,0x%x)\n", func, r0, r1, r2, r3);
 
 	swdp_core_resume();
 	if (swdp_core_wait_for_halt() == 0) {
@@ -545,13 +561,13 @@ int invoke(u32 agent, u32 func, u32 r0, u32 r1, u32 r2, u32 r3) {
 		swdp_core_read(0, &res);
 		swdp_core_read(15, &pc);
 		if (pc != agent) {
-			xprintf("error: pc (%08x) is not at %08x\n", pc, agent);
+			xprintf(XCORE, "error: pc (%08x) is not at %08x\n", pc, agent);
 			return -1;
 		}
-		if (res) xprintf("failure code %08x\n", res);
+		if (res) xprintf(XCORE, "failure code %08x\n", res);
 		return res;
 	}
-	xprintf("interrupted\n");
+	xprintf(XCORE, "interrupted\n");
 	return -1;
 }
 
@@ -560,29 +576,29 @@ int run_flash_agent(u32 flashaddr, void *data, size_t data_sz) {
 	size_t agent_sz;
 
 	if ((agent = load_agent(agent_arch, &agent_sz)) == NULL) {
-		xprintf("error: cannot load flash agent for architecture '%s'\n",
+		xprintf(XCORE, "error: cannot load flash agent for architecture '%s'\n",
 			agent_arch ? agent_arch : "unknown");
-		xprintf("error: set architecture with: arch <name>\n");
+		xprintf(XCORE, "error: set architecture with: arch <name>\n");
 		goto fail;
 	}
 	// sanity check
 	if ((agent_sz < sizeof(flash_agent)) ||
 		(agent->magic != AGENT_MAGIC) ||
 		(agent->version != AGENT_VERSION)) {
-		xprintf("error: invalid agent image\n");
+		xprintf(XCORE, "error: invalid agent image\n");
 		goto fail;
 	}
 	// replace magic with bkpt instructions
 	agent->magic = 0xbe00be00;
 
 	if (do_attach(0,0)) {
-		xprintf("error: failed to attach\n");
+		xprintf(XCORE, "error: failed to attach\n");
 		goto fail;
 	}
 	do_reset_stop(0,0);
 
 	if (agent->flags & FLAG_BOOT_ROM_HACK) {
-		xprintf("executing boot rom\n");
+		xprintf(XCORE, "executing boot rom\n");
 		if (swdp_watchpoint_rw(0, 0)) {
 			goto fail;
 		}
@@ -594,7 +610,7 @@ int run_flash_agent(u32 flashaddr, void *data, size_t data_sz) {
 	}
 
 	if (swdp_ahb_write32(agent->load_addr, (void*) agent, agent_sz / 4)) {
-		xprintf("error: failed to download agent\n");
+		xprintf(XCORE, "error: failed to download agent\n");
 		goto fail;
 	}
 	if (invoke(agent->load_addr, agent->setup, 0, 0, 0, 0)) {
@@ -603,7 +619,7 @@ int run_flash_agent(u32 flashaddr, void *data, size_t data_sz) {
 	if (swdp_ahb_read32(agent->load_addr + 16, (void*) &agent->data_addr, 4)) {
 		goto fail;
 	}
-	xprintf("agent %d @%08x, buffer %dK @%08x, flash %dK @%08x\n",
+	xprintf(XCORE, "agent %d @%08x, buffer %dK @%08x, flash %dK @%08x\n",
 		agent_sz, agent->load_addr,
 		agent->data_size / 1024, agent->data_addr,
 		agent->flash_size / 1024, agent->flash_addr);
@@ -617,23 +633,23 @@ int run_flash_agent(u32 flashaddr, void *data, size_t data_sz) {
 	if ((flashaddr < agent->flash_addr) ||
 		(data_sz > agent->flash_size) ||
 		((flashaddr + data_sz) > (agent->flash_addr + agent->flash_size))) {
-		xprintf("invalid flash address %08x\n", flashaddr);
+		xprintf(XCORE, "invalid flash address %08x\n", flashaddr);
 		goto fail;
 	}
 
 	if (data == NULL) {
 		// erase
 		if (invoke(agent->load_addr, agent->erase, flashaddr, data_sz, 0, 0)) {
-			xprintf("failed to erase %d bytes at %08x\n", data_sz, flashaddr);
+			xprintf(XCORE, "failed to erase %d bytes at %08x\n", data_sz, flashaddr);
 			goto fail;
 		}
 	} else {
 		// write
 		u8 *ptr = (void*) data;
 		u32 xfer;
-		xprintf("flashing %d bytes at %08x...\n", data_sz, flashaddr);
+		xprintf(XCORE, "flashing %d bytes at %08x...\n", data_sz, flashaddr);
 		if (invoke(agent->load_addr, agent->erase, flashaddr, data_sz, 0, 0)) {
-			xprintf("failed to erase %d bytes at %08x\n", data_sz, flashaddr);
+			xprintf(XCORE, "failed to erase %d bytes at %08x\n", data_sz, flashaddr);
 			goto fail;
 		}
 		while (data_sz > 0) {
@@ -643,12 +659,12 @@ int run_flash_agent(u32 flashaddr, void *data, size_t data_sz) {
 				xfer = data_sz;
 			}
 			if (swdp_ahb_write32(agent->data_addr, (void*) ptr, xfer / 4)) {
-				xprintf("download to %08x failed\n", agent->data_addr);
+				xprintf(XCORE, "download to %08x failed\n", agent->data_addr);
 				goto fail;
 			}
 			if (invoke(agent->load_addr, agent->write,
 				flashaddr, agent->data_addr, xfer, 0)) {
-				xprintf("failed to flash %d bytes to %08x\n", xfer, flashaddr);
+				xprintf(XCORE, "failed to flash %d bytes to %08x\n", xfer, flashaddr);
 				goto fail;
 			}
 			ptr += xfer;
@@ -670,11 +686,11 @@ int do_flash(int argc, param *argv) {
 	void *data = NULL;
 	size_t data_sz;
 	if (argc != 2) {
-		xprintf("error: usage: flash <file> <addr>\n");
+		xprintf(XCORE, "error: usage: flash <file> <addr>\n");
 		return -1;
 	}
 	if ((data = load_file(argv[0].s, &data_sz)) == NULL) {
-		xprintf("error: cannot load '%s'\n", argv[0].s);
+		xprintf(XCORE, "error: cannot load '%s'\n", argv[0].s);
 		return -1;
 	}
 	// word align
@@ -687,7 +703,7 @@ int do_erase(int argc, param *argv) {
 		return run_flash_agent(0, NULL, 0xFFFFFFFF);
 	}
 	if (argc != 2) {
-		xprintf("error: usage: erase <addr> <length> | erase all\n");
+		xprintf(XCORE, "error: usage: erase <addr> <length> | erase all\n");
 		return -1;
 	}
 	return run_flash_agent(argv[0].n, NULL, argv[1].n);
@@ -701,7 +717,7 @@ int do_log(int argc, param *argv) {
 		} else if (!strcmp(argv[0].s, "swd")) {
 			flags |= LF_SWD;
 		} else {
-			xprintf("error: allowed flags: gdb swd\n");
+			xprintf(XCORE, "error: allowed flags: gdb swd\n");
 			return -1;
 		}
 		argc--;
@@ -719,35 +735,35 @@ int do_finfo(int argc, param *argv) {
 	swdp_ahb_read(MMFAR, &mmfar);
 	swdp_ahb_read(BFAR, &bfar);
 
-	xprintf("CFSR %08x  MMFAR %08x\n", cfsr, mmfar);
-	xprintf("HFSR %08x   BFAR %08x\n", hfsr, bfar);
-	xprintf("DFSR %08x\n", dfsr);
+	xprintf(XDATA, "CFSR %08x  MMFAR %08x\n", cfsr, mmfar);
+	xprintf(XDATA, "HFSR %08x   BFAR %08x\n", hfsr, bfar);
+	xprintf(XDATA, "DFSR %08x\n", dfsr);
 
-	if (cfsr & CFSR_IACCVIOL)	xprintf(">MM: Inst Access Violation\n");
-	if (cfsr & CFSR_DACCVIOL)	xprintf(">MM: Data Access Violation\n");
-	if (cfsr & CFSR_MUNSTKERR)	xprintf(">MM: Derived MM Fault on Exception Return\n");
-	if (cfsr & CFSR_MSTKERR)	xprintf(">MM: Derived MM Fault on Exception Entry\n");
-	if (cfsr & CFSR_MLSPERR)	xprintf(">MM: MM Fault During Lazy FP Save\n");
-	if (cfsr & CFSR_MMARVALID)	xprintf(">MM: MMFAR has valid contents\n");
+	if (cfsr & CFSR_IACCVIOL)	xprintf(XDATA, ">MM: Inst Access Violation\n");
+	if (cfsr & CFSR_DACCVIOL)	xprintf(XDATA, ">MM: Data Access Violation\n");
+	if (cfsr & CFSR_MUNSTKERR)	xprintf(XDATA, ">MM: Derived MM Fault on Exception Return\n");
+	if (cfsr & CFSR_MSTKERR)	xprintf(XDATA, ">MM: Derived MM Fault on Exception Entry\n");
+	if (cfsr & CFSR_MLSPERR)	xprintf(XDATA, ">MM: MM Fault During Lazy FP Save\n");
+	if (cfsr & CFSR_MMARVALID)	xprintf(XDATA, ">MM: MMFAR has valid contents\n");
 
-	if (cfsr & CFSR_IBUSERR)	xprintf(">BF: Bus Fault on Instruction Prefetch\n");
-	if (cfsr & CFSR_PRECISERR)	xprintf(">BF: Precise Data Access Error, Addr in BFAR\n");
-	if (cfsr & CFSR_IMPRECISERR)	xprintf(">BF: Imprecise Data Access Error\n");
-	if (cfsr & CFSR_UNSTKERR)	xprintf(">BF: Derived Bus Fault on Exception Return\n");
-	if (cfsr & CFSR_STKERR)		xprintf(">BF: Derived Bus Fault on Exception Entry\n");
-	if (cfsr & CFSR_LSPERR)		xprintf(">BF: Bus Fault During Lazy FP Save\n");
-	if (cfsr & CFSR_BFARVALID)	xprintf(">BF: BFAR has valid contents\n");
+	if (cfsr & CFSR_IBUSERR)	xprintf(XDATA, ">BF: Bus Fault on Instruction Prefetch\n");
+	if (cfsr & CFSR_PRECISERR)	xprintf(XDATA, ">BF: Precise Data Access Error, Addr in BFAR\n");
+	if (cfsr & CFSR_IMPRECISERR)	xprintf(XDATA, ">BF: Imprecise Data Access Error\n");
+	if (cfsr & CFSR_UNSTKERR)	xprintf(XDATA, ">BF: Derived Bus Fault on Exception Return\n");
+	if (cfsr & CFSR_STKERR)		xprintf(XDATA, ">BF: Derived Bus Fault on Exception Entry\n");
+	if (cfsr & CFSR_LSPERR)		xprintf(XDATA, ">BF: Bus Fault During Lazy FP Save\n");
+	if (cfsr & CFSR_BFARVALID)	xprintf(XDATA, ">BF: BFAR has valid contents\n");
 
-	if (cfsr & CFSR_UNDEFINSTR)	xprintf(">UF: Undefined Instruction Usage Fault\n");
-	if (cfsr & CFSR_INVSTATE)	xprintf(">UF: EPSR.T or ESPR.IT invalid\n");
-	if (cfsr & CFSR_INVPC)		xprintf(">UF: Integrity Check Error on EXC_RETURN\n");
-	if (cfsr & CFSR_NOCP)		xprintf(">UF: Coprocessor Error\n");
-	if (cfsr & CFSR_UNALIGNED)	xprintf(">UF: Unaligned Access Error\n");
-	if (cfsr & CFSR_DIVBYZERO)	xprintf(">UF: Divide by Zero\n");
+	if (cfsr & CFSR_UNDEFINSTR)	xprintf(XDATA, ">UF: Undefined Instruction Usage Fault\n");
+	if (cfsr & CFSR_INVSTATE)	xprintf(XDATA, ">UF: EPSR.T or ESPR.IT invalid\n");
+	if (cfsr & CFSR_INVPC)		xprintf(XDATA, ">UF: Integrity Check Error on EXC_RETURN\n");
+	if (cfsr & CFSR_NOCP)		xprintf(XDATA, ">UF: Coprocessor Error\n");
+	if (cfsr & CFSR_UNALIGNED)	xprintf(XDATA, ">UF: Unaligned Access Error\n");
+	if (cfsr & CFSR_DIVBYZERO)	xprintf(XDATA, ">UF: Divide by Zero\n");
 
-	if (hfsr & HFSR_VECTTBL)	xprintf(">HF: Vector Table Read Fault\n");
-	if (hfsr & HFSR_FORCED)		xprintf(">HF: Exception Escalated to Hard Fault\n");
-	if (hfsr & HFSR_DEBUGEVT)	xprintf(">HF: Debug Event\n");
+	if (hfsr & HFSR_VECTTBL)	xprintf(XDATA, ">HF: Vector Table Read Fault\n");
+	if (hfsr & HFSR_FORCED)		xprintf(XDATA, ">HF: Exception Escalated to Hard Fault\n");
+	if (hfsr & HFSR_DEBUGEVT)	xprintf(XDATA, ">HF: Debug Event\n");
 
 	// clear sticky fault bits
 	swdp_ahb_write(CFSR, CFSR_ALL);
@@ -759,18 +775,18 @@ extern int swdp_step_no_ints;
 
 int do_maskints(int argc, param *argv) {
 	if (argc != 1) {
-		xprintf("usage: maskints [on|off|always]\n");
+		xprintf(XCORE, "usage: maskints [on|off|always]\n");
 		return -1;
 	}
 	if (!strcmp(argv[0].s, "on")) {
 		swdp_step_no_ints = 1;
-		xprintf("maskints: while stepping\n");
+		xprintf(XCORE, "maskints: while stepping\n");
 	} else if (!strcmp(argv[0].s, "always")) {
 		swdp_step_no_ints = 2;
-		xprintf("maskints: always\n");
+		xprintf(XCORE, "maskints: always\n");
 	} else {
 		swdp_step_no_ints = 0;
-		xprintf("maskints: never\n");
+		xprintf(XCORE, "maskints: never\n");
 	}
 	return 0;
 }
@@ -778,7 +794,7 @@ int do_maskints(int argc, param *argv) {
 int do_threads(int argc, param *argv) {
 	if (argc == 1) {
 		if (strcmp(argv[0].s, "clear")) {
-			xprintf("usage: threads [clear]\n");
+			xprintf(XCORE, "usage: threads [clear]\n");
 			return -1;
 		}
 		swdp_core_halt();

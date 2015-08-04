@@ -57,15 +57,15 @@ static char *lkstate[] = {
 };
 
 void dump_lk_thread(lkthread_t *t) {
-	xprintf("thread: @%08x sp=%08x wq=%08x st=%d name='%s'\n",
+	xprintf(XDATA, "thread: @%08x sp=%08x wq=%08x st=%d name='%s'\n",
 		t->threadptr, t->saved_sp, t->waitq, t->state, t->name);
-	xprintf("  r0 %08x r4 %08x r8 %08x ip %08x\n",
+	xprintf(XDATA, "  r0 %08x r4 %08x r8 %08x ip %08x\n",
 		t->regs[0], t->regs[4], t->regs[8], t->regs[12]);
-	xprintf("  r1 %08x r5 %08x r9 %08x sp %08x\n",
+	xprintf(XDATA, "  r1 %08x r5 %08x r9 %08x sp %08x\n",
 		t->regs[1], t->regs[5], t->regs[9], t->regs[13]);
-	xprintf("  r2 %08x r6 %08x 10 %08x lr %08x\n",
+	xprintf(XDATA, "  r2 %08x r6 %08x 10 %08x lr %08x\n",
 		t->regs[2], t->regs[6], t->regs[10], t->regs[14]);
-	xprintf("  r3 %08x r7 %08x 11 %08x pc %08x\n",
+	xprintf(XDATA, "  r3 %08x r7 %08x 11 %08x pc %08x\n",
 		t->regs[3], t->regs[7], t->regs[11], t->regs[15]);
 }
 
@@ -148,21 +148,21 @@ static int load_debuginfo(lkdebuginfo_t *di, int verbose) {
 	if (swdp_ahb_read(0xE000ED08, &vtbl)) vtbl = 0;
 	if (swdp_ahb_read((DI_OFF_MAGIC + vtbl), &x)) return -1;
 	if (x != DI_MAGIC) {
-		if (verbose) xprintf("debuginfo: bad magic\n");
+		if (verbose) xprintf(XCORE, "debuginfo: bad magic\n");
 		return -1;
 	}
 	if (swdp_ahb_read((DI_OFF_PTR + vtbl), &x)) return -1;
 	if (x & 3) return -1;
-	if (verbose) xprintf("debuginfo @ %08x\n", x);
+	if (verbose) xprintf(XCORE, "debuginfo @ %08x\n", x);
 	if (swdp_ahb_read32(x, (void*) di, sizeof(lkdebuginfo_t) / 4)) return -1;
 	if (verbose) {
-		xprintf("di %08x %08x %08x %d %d %d %d %d %d\n",
+		xprintf(XDATA, "di %08x %08x %08x %d %d %d %d %d %d\n",
 			di->version, di->thread_list_ptr, di->current_thread_ptr,
 			di->off_list_node, di->off_state, di->off_saved_sp,
 			di->off_was_preempted, di->off_name, di->off_waitq);
 	}
 	if (di->version != 0x0100) {
-		if (verbose) xprintf("debuginfo: unsupported version\n");
+		if (verbose) xprintf(XCORE, "debuginfo: unsupported version\n");
 		return -1;
 	}
 	return 0;

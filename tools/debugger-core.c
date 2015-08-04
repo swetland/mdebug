@@ -1,7 +1,7 @@
 /* debugger-core.c
  *
  * Copyright 2011 Brian Swetland <swetland@frotz.net>
- * 
+ *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -30,7 +30,6 @@
 #include <protocol/rswdp.h>
 #include "debugger.h"
 #include "rswdp.h"
-#include "linenoise.h"
 
 #define DHCSR_C_DEBUGEN		(1 << 0)
 #define DHCSR_C_HALT		(1 << 1)
@@ -53,9 +52,7 @@
 #define DFSR_MASK		0x1F
 
 static void m_event(const char *evt) {
-	linenoisePause();
-	fprintf(stdout, "DEBUG EVENT: %s\n", evt);
-	linenoiseResume();
+	xprintf(XCORE, "DEBUG EVENT: %s\n", evt);
 }
 
 static void monitor(void) {
@@ -81,9 +78,7 @@ void debugger_lock() {
 	if (swdp_clear_error()) {
 #if 0
 		// way too noisy if the link goes down
-		linenoisePause();
 		xprintf("SWD ERROR persists. Attempting link reset.\n");
-		linenoiseResume();
 #endif
 		swdp_reset();
 	}
@@ -91,9 +86,7 @@ void debugger_lock() {
 
 void debugger_unlock() {
 	if (swdp_error()) {
-		linenoisePause();
-		xprintf("SWD ERROR\n");
-		linenoiseResume();
+		xprintf(XCORE, "SWD ERROR\n");
 	}
 	pthread_mutex_unlock(&_dbg_lock);
 }
@@ -114,7 +107,7 @@ static pthread_t _listen_master;
 void *gdb_listener(void *arg) {
 	int fd;
 	if ((fd = socket_listen_tcp(5555)) < 0) {
-		fprintf(stderr, "gdb_listener() cannot bind to 5555\n");
+		xprintf(XGDB, "gdb_listener() cannot bind to 5555\n");
 		return NULL;
 	}
 	for (;;) {
@@ -185,7 +178,7 @@ static int do_script(int argc, param *argv) {
 		fp = stdin;
 	} else {
 		if (!(fp = fopen(argv[0].s, "r"))) {
-			xprintf("error: cannot open '%s'\n", argv[0].s);
+			xprintf(XCORE, "error: cannot open '%s'\n", argv[0].s);
 			return -1;
 		}
 	}
@@ -200,7 +193,7 @@ static int do_script(int argc, param *argv) {
 			char *name, *x;
 			name = line + 9;
 			if (newfunc) {
-				xprintf("error: nested functions not allowed\n");
+				xprintf(XCORE, "error: nested functions not allowed\n");
 				break;
 			}
 			while (isspace(*name))
@@ -210,12 +203,12 @@ static int do_script(int argc, param *argv) {
 				x++;
 			*x = 0;
 			if (*name == 0) {
-				xprintf("error: functions must have names\n");
+				xprintf(XCORE, "error: functions must have names\n");
 				break;
 			}
 			newfunc = malloc(sizeof(*newfunc) + strlen(name) + 1);
 			if (newfunc == 0) {
-				xprintf("error: out of memory\n");
+				xprintf(XCORE, "error: out of memory\n");
 				break;
 			}
 			strcpy(newfunc->name, name);
@@ -234,7 +227,7 @@ static int do_script(int argc, param *argv) {
 			}
 			fl = malloc(sizeof(*fl) + strlen(line) + 1);
 			if (fl == 0) {
-				xprintf("out of memory");
+				xprintf(XCORE, "out of memory");
 				newfunc = 0;
 				if (fp != stdin)
 					fclose(fp);
@@ -249,7 +242,7 @@ static int do_script(int argc, param *argv) {
 			}
 			lastline = fl;
 		} else {
-			xprintf("script> %s", line);
+			xprintf(XCORE, "script> %s", line);
 			if (debugger_command(line))
 				return -1;
 		}
@@ -265,18 +258,18 @@ static int do_script(int argc, param *argv) {
 static int do_set(int argc, param *argv) {
 	const char *name;
 	if ((argc != 2) && (argc != 4)) {
-		xprintf("error: set requires two or four arguments\n");
+		xprintf(XCORE, "error: set requires two or four arguments\n");
 		return -1;
 	}
 	name = argv[0].s;
 	if (*name == '$')
 		name++;
 	if (*name == 0) {
-		xprintf("error: empty name?!\n");
+		xprintf(XCORE, "error: empty name?!\n");
 		return -1;
 	}
 	if (!isalpha(*name)) {
-		xprintf("error: variable name must begin with a letter\n");
+		xprintf(XCORE, "error: variable name must begin with a letter\n");
 		return -1;
 	}
 
@@ -303,7 +296,7 @@ static int do_set(int argc, param *argv) {
 				n = a / b;
 			}
 		} else {
-			xprintf("error: set <var> <a> <op> <b> requires op: + - * / << >>\n");
+			xprintf(XCORE, "error: set <var> <a> <op> <b> requires op: + - * / << >>\n");
 			return -1;
 		}
 		variable_set(name, n);
@@ -352,14 +345,14 @@ static int parse_number(const char *in, unsigned *out) {
 					return 0;
 				}
 			}
-			xprintf("no local variable %s\n", text);
+			xprintf(XCORE, "no local variable %s\n", text);
 			*out = 0;
 			return 0;
 		}
 		if (variable_get(text + 1, &value) == 0) {
 			*out = value;
 		} else {
-			xprintf("undefined variable '%s'\n", text + 1);
+			xprintf(XCORE, "undefined variable '%s'\n", text + 1);
 			*out = 0;
 		}
 		return 0;
@@ -397,7 +390,7 @@ static int exec_function(struct funcinfo *f, int argc, param *argv) {
 		strcpy(text, line->text);
 		r = debugger_command(text);
 		if (r) {
-			xprintf("error: %s: line %d\n", f->name, n);
+			xprintf(XCORE, "error: %s: line %d\n", f->name, n);
 			goto done;
 		}
 	}
@@ -422,9 +415,7 @@ static int _debugger_exec(const char *cmd, unsigned argc, param *argv) {
 		if (!strcasecmp(cmd, c->name)) {
 			int n;
 			debugger_lock();
-			linenoisePause();
 			n = c->func(argc, argv);
-			linenoiseResume();
 			debugger_unlock();
 			return n;
 		}
@@ -485,14 +476,14 @@ int debugger_command(char *line) {
 
 	for (c = 0; c < n; c++) {
 		if (parse_number(arg[c].s, &(arg[c].n))) {
-			xprintf("error: bad number: %s\n", arg[c].s);
+			xprintf(XCORE, "error: bad number: %s\n", arg[c].s);
 			return -1;
 		}
 	}
 
 	r = _debugger_exec(arg[0].s, n - 1, arg + 1);
 	if (r == ERROR_UNKNOWN) {
-		xprintf("unknown command: %s\n", arg[0].s);
+		xprintf(XCORE, "unknown command: %s\n", arg[0].s);
 	}
 	return r;
 }

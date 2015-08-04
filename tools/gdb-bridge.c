@@ -1,7 +1,7 @@
 /* gdb-bridge.c
  *
  * Copyright 2011 Brian Swetland <swetland@frotz.net>
- * 
+ *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -28,7 +28,6 @@
 #include "rswdp.h"
 #include <protocol/rswdp.h>
 #include "debugger.h"
-#include "linenoise.h"
 #include "lkdebug.h"
 
 // useful gdb stuff
@@ -54,7 +53,7 @@ struct gdbcnxn {
 	unsigned txsum;
 	unsigned rxsum;
 	unsigned flags;
-	unsigned char *txptr;	
+	unsigned char *txptr;
 	unsigned char *rxptr;
 	unsigned char rxbuf[MAXPKT];
 	unsigned char txbuf[MAXPKT];
@@ -63,15 +62,6 @@ struct gdbcnxn {
 	lkthread_t *gselected;
 	lkthread_t *cselected;
 };
-
-void zprintf(const char *fmt, ...) {
-	linenoisePause();
-	va_list ap;
-	va_start(ap, fmt);
-	vfprintf(stderr, fmt, ap);
-	va_end(ap);
-	linenoiseResume();
-}
 
 void gdb_init(struct gdbcnxn *gc, int fd) {
 	gc->fd = fd;
@@ -121,7 +111,7 @@ void gdb_epilogue(struct gdbcnxn *gc) {
 	gdb_puts(gc, tmp);
 
 	if (tx_full(gc)) {
-		zprintf("GDB: TX Packet Too Large\n");
+		xprintf(XGDB, "gdb: TX Packet Too Large\n");
 		return;
 	}
 
@@ -131,7 +121,7 @@ void gdb_epilogue(struct gdbcnxn *gc) {
 		r = write(gc->fd, ptr, len);
 		if (r <= 0) {
 			if (errno == EINTR) continue;
-			zprintf("GDB: TX Write Error\n");
+			xprintf(XGDB, "gdb: TX Write Error\n");
 			return;
 		}
 		ptr += r;
@@ -153,7 +143,7 @@ void handle_command(struct gdbcnxn *gc, unsigned char *cmd);
 
 void gdb_recv_cmd(struct gdbcnxn *gc) {
 	if (log_flags & LF_GDB) {
-		zprintf("PKT: %s\n", gc->rxbuf);
+		xprintf(XGDB, "gdb: pkt: %s\n", gc->rxbuf);
 	}
 	debugger_lock();
 	handle_command(gc, gc->rxbuf);
@@ -184,7 +174,7 @@ int gdb_recv(struct gdbcnxn *gc, unsigned char *ptr, int len) {
 				gc->state = S_CHK1;
 			} else {
 				if (rx_full(gc)) {
-					zprintf("PKT: Too Large, Discarding.");
+					xprintf(XGDB, "gdb: pkt: Too Large, Discarding.");
 					gc->rxptr = gc->rxbuf;
 					gc->state = S_IDLE;
 				} else {
@@ -315,7 +305,7 @@ static void handle_query(struct gdbcnxn *gc, char *cmd, char *args) {
 			p+=2;
 		}
 		*cmd = 0;
-		zprintf("GDB: %s\n", args);
+		xprintf(XGDB, "gdb: %s\n", args);
 		gc->flags |= F_CONSOLE;
 		debugger_unlock();
 		debugger_command(args);
@@ -340,7 +330,7 @@ static void handle_query(struct gdbcnxn *gc, char *cmd, char *args) {
 	} else if(!strcmp(cmd, "Attached")) {
 		/* no process management. ignore */
 	} else {
-		zprintf("GDB: unsupported: q%s:%s\n", cmd, args);
+		xprintf(XGDB, "gdb: unsupported: q%s:%s\n", cmd, args);
 	}
 }
 
@@ -349,7 +339,7 @@ static void handle_set(struct gdbcnxn *gc, char *cmd, char *args) {
 		gc->flags &= ~F_ACK;
 		gdb_puts(gc, "OK");
 	} else {
-		zprintf("GDB: unsupported: Q%s:%s\n", cmd, args);
+		xprintf(XGDB, "gdb: unsupported: Q%s:%s\n", cmd, args);
 	}
 }
 
@@ -406,13 +396,13 @@ void write_memory(u32 addr, unsigned char *data, int len) {
 #define FP_REMAP	0xE0002004
 #define FP_COMP(n)	(0xE0002008 + ((n) * 4))
 
-#define MAXFP 16 
+#define MAXFP 16
 static u32 maxfp = 0;
 static u32 fp_addr[MAXFP] = { 0, };
 static u32 fp_state[MAXFP] = { 0, };
 
 #define MAXBP 16
-static u32 maxbp; 
+static u32 maxbp;
 static u32 bp_addr[MAXBP] = { 0, };
 static u32 bp_state[MAXBP] = { 0, };
 
@@ -420,12 +410,12 @@ int handle_flashpatch(int add, u32 addr, u32 kind) {
 	u32 x;
 	int n;
 	if (swdp_ahb_read(ROMTAB_FPB, &x)) {
-		zprintf("GDB: cannot read romtable\n");
+		xprintf(XGDB, "gdb: cannot read romtable\n");
 		return -1;
 	}
 	if (x & 1) {
 		if (swdp_ahb_read(FP_CTRL, &x)) {
-			zprintf("GDB: cannot read flashpatch ctrl\n");
+			xprintf(XGDB, "gdb: cannot read flashpatch ctrl\n");
 			return -1;
 		}
 		n = ((x & 0xF0) >> 4) | ((x & 0x7000) >> 4);
@@ -433,10 +423,10 @@ int handle_flashpatch(int add, u32 addr, u32 kind) {
 		n = 0;
 	}
 	if (n != maxfp) {
-		zprintf("GDB: %d flashpatch breakpoint registers\n", n);
+		xprintf(XGDB, "gdb: %d flashpatch breakpoint registers\n", n);
 		if (n > 16) n = 16;
 		if (maxfp != 0) {
-			zprintf("GDB: previously %d registers...\n", maxfp);
+			xprintf(XGDB, "gdb: previously %d registers...\n", maxfp);
 		}
 		maxfp = n;
 	}
@@ -447,7 +437,7 @@ int handle_flashpatch(int add, u32 addr, u32 kind) {
 			} else {
 				fp_state[n] = 0;
 				swdp_ahb_write(FP_COMP(n), 0);
-				zprintf("GDB: - FP BP @ %08x\n", addr);
+				xprintf(XGDB, "gdb: - FP BP @ %08x\n", addr);
 				return 0;
 			}
 		}
@@ -474,7 +464,7 @@ add1:
 	fp_state[n] = 1;
 	fp_addr[n] = addr;
 add0:
-	zprintf("GDB: + FP BP @ %08x\n", addr);
+	xprintf(XGDB, "gdb: + FP BP @ %08x\n", addr);
 	return 0;
 }
 
@@ -486,12 +476,12 @@ int handle_breakpoint(int add, u32 addr, u32 kind) {
 		return 0;
 	}
 	if (swdp_ahb_read(ROMTAB_DWT, &x)) {
-		zprintf("GDB: cannot read romtable\n");
+		xprintf(XGDB, "gdb: cannot read romtable\n");
 		return -1;
 	}
 	if (x & 1) {
 		if (swdp_ahb_read(DWT_CTRL, &x)) {
-			zprintf("GDB: cannot read dwt ctrl\n");
+			xprintf(XGDB, "gdb: cannot read dwt ctrl\n");
 			return -1;
 		}
 		n = x >> 28;
@@ -499,9 +489,9 @@ int handle_breakpoint(int add, u32 addr, u32 kind) {
 		n = 0;
 	}
 	if (n != maxbp) {
-		zprintf("GDB: %d dwt breakpoint registers\n", n);
+		xprintf(XGDB, "gdb: %d dwt breakpoint registers\n", n);
 		if (maxbp != 0) {
-			zprintf("GDB: previously %d registers...\n", maxbp);
+			xprintf(XGDB, "gdb: previously %d registers...\n", maxbp);
 		}
 		maxbp = n;
 	}
@@ -518,12 +508,12 @@ int handle_breakpoint(int add, u32 addr, u32 kind) {
 				bp_addr[n] = addr;
 				bp_state[n] = 1;
 				swdp_watchpoint_pc(n, addr);
-				zprintf("GDB: + HW BP @ %08x\n", addr);
+				xprintf(XGDB, "gdb: + HW BP @ %08x\n", addr);
 				return 0;
 			}
 		}
 		if (n == maxbp) {
-			zprintf("GDB: Out of hardware breakpoints.\n");
+			xprintf(XGDB, "gdb: Out of hardware breakpoints.\n");
 			return 1;
 		}
 		return 0;
@@ -535,17 +525,17 @@ int handle_breakpoint(int add, u32 addr, u32 kind) {
 				break;
 			}
 		}
-		zprintf("GDB: - HW BP @ %08x\n", addr);
+		xprintf(XGDB, "gdb: - HW BP @ %08x\n", addr);
 		return 0;
 	}
 }
 
 void gdb_update_threads(struct gdbcnxn *gc) {
-	zprintf("GDB: sync threadlist\n");
+	xprintf(XGDB, "gdb: sync threadlist\n");
 	free_lk_threads(gc->threadlist);
 	if (gc->flags & F_LK_THREADS) {
 		if ((gc->threadlist = find_lk_threads(0)) == NULL) {
-			zprintf("GDB: problem syncing threadlist\n");
+			xprintf(XGDB, "gdb: problem syncing threadlist\n");
 		}
 		gc->cselected = gc->threadlist;
 		gc->gselected = gc->threadlist;
@@ -609,7 +599,7 @@ void handle_command(struct gdbcnxn *gc, unsigned char *cmd) {
 		} else if (cmd[1] == 'c') {
 			gc->cselected = t;
 		} else {
-			zprintf("GDB: selecting '%c' thread?!\n", cmd[1]);
+			xprintf(XGDB, "gdb: selecting '%c' thread?!\n", cmd[1]);
 		}
 		gdb_puts(gc, "OK");
 		break;
@@ -669,7 +659,7 @@ void handle_command(struct gdbcnxn *gc, unsigned char *cmd) {
 	// write registers 0...
 	case 'G': {
 		if (gc->gselected && !gc->gselected->active) {
-			zprintf("GDB: attempting to write to inactive registers\n");
+			xprintf(XGDB, "gdb: attempting to write to inactive registers\n");
 			break;
 		}
 		int len = hextobin(gc->rxbuf, (char*) cmd + 1, MAXPKT);
@@ -703,7 +693,7 @@ void handle_command(struct gdbcnxn *gc, unsigned char *cmd) {
 		int len;
 		char *data = strchr((char*) cmd + 1, '=');
 		if (gc->gselected && !gc->gselected->active) {
-			zprintf("GDB: attempting to write to inactive registers\n");
+			xprintf(XGDB, "gdb: attempting to write to inactive registers\n");
 			break;
 		}
 		if (data) {
@@ -741,7 +731,6 @@ void handle_command(struct gdbcnxn *gc, unsigned char *cmd) {
 			handle_set(gc, (char*) (cmd + 1), args);
 		}
 		break;
-		
 	}
 	case 'z':
 	case 'Z': {
@@ -760,7 +749,7 @@ void handle_command(struct gdbcnxn *gc, unsigned char *cmd) {
 		break;
 	}
 	default:
-		zprintf("GDB: unknown command: %c\n", cmd[0]);
+		xprintf(XGDB, "gdb: unknown command: %c\n", cmd[0]);
 	}
 	gdb_epilogue(gc);
 }
@@ -799,7 +788,7 @@ void gdb_server(int fd) {
 	if (pipefds[0] == -1) {
 		if (pipe(pipefds)) ;
 	}
-	zprintf("[ gdb connected ]\n");
+	xprintf(XGDB,"[ gdb connected ]\n");
 	debugger_unlock();
 
 	gc.flags |= F_LK_THREADS;
@@ -862,6 +851,6 @@ void gdb_server(int fd) {
 
 	debugger_lock();
 	active_gc = NULL;
-	zprintf("[ gdb connected ]\n");
+	xprintf(XGDB, "[ gdb connected ]\n");
 	debugger_unlock();
 }

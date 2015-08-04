@@ -38,13 +38,15 @@ static const char *scriptfile = NULL;
 
 void gdb_console_puts(const char *msg);
 
-void xprintf(const char *fmt, ...) {
+void xprintf(xpchan ch, const char *fmt, ...) {
 	char line[256];
 	va_list ap;
 	va_start(ap, fmt);
 	vsnprintf(line, 256, fmt, ap);
 	va_end(ap);
+	linenoisePause();
 	if (write(1, line, strlen(line)) < 0) ;
+	linenoiseResume();
 	gdb_console_puts(line);
 }
 

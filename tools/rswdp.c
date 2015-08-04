@@ -29,6 +29,8 @@
 #include "rswdp.h"
 #include "arm-v7m.h"
 
+#include <debugger.h>
+
 static volatile int ATTN;
 
 void swdp_interrupt(void) {
@@ -101,7 +103,7 @@ static void process_async(u32 *data, unsigned count) {
 				return;
 			tmp = data[n];
 			data[n] = 0;
-			printf("%s",(char*) data);
+			xprintf(XSWD, "%s",(char*) data);
 			data[n] = tmp;
 			data += n;
 			count -= n;
@@ -129,7 +131,7 @@ static int process_reply(struct txn *t, u32 *data, int count) {
 			continue;
 		case CMD_SWD_DATA:
 			if (n > rxc) {
-				fprintf(stderr,"reply overrun (%d > %d)\n", n, rxc);
+				xprintf(XSWD, "reply overrun (%d > %d)\n", n, rxc);
 				return -1;
 			}
 			while (n-- > 0) {
@@ -146,7 +148,7 @@ static int process_reply(struct txn *t, u32 *data, int count) {
 				return 0;
 			}
 		default:
-			fprintf(stderr,"unknown command 0x%02x\n", RSWD_MSG_CMD(msg));
+			xprintf(XSWD,"unknown command 0x%02x\n", RSWD_MSG_CMD(msg));
 			return -1;
 		}
 	}
@@ -221,12 +223,13 @@ restart:
 		if ((usb = usb_open(0x18d1, 0xdb03, 0))) break;
 		if ((usb = usb_open(0x18d1, 0xdb04, 0))) break;
 		if (once) {
-			fprintf(stderr, "\r\nusb: waiting for debugger device\r\n");
+			xprintf(XSWD, "usb: waiting for debugger device\n");
 			once = 0;
 		}
 		usleep(250000);
 	}
-	fprintf(stderr, "\r\nusb: debugger connected\r\n");
+	once = 0;
+	xprintf(XSWD, "usb: debugger connected\n");
 	pthread_mutex_lock(&swd_lock);
 	swd_online = 1;
 	for (;;) {
@@ -234,14 +237,14 @@ restart:
 		r = usb_read_forever(usb, data, 4096);
 		pthread_mutex_lock(&swd_lock);
 		if (r < 0) {
-			fprintf(stderr,"\r\nusb: debugger disconnected\r\n");
+			xprintf(XSWD, "usb: debugger disconnected\n");
 			swd_online = -1;
 			swd_txn_status = TXN_STATUS_FAIL;
 			pthread_cond_broadcast(&swd_event);
 			break;
 		}
 		if ((r < 4) || (r & 3)) {
-			fprintf(stderr,"\r\nusb: rx: discard packet (%d)\r\n", r);
+			xprintf(XSWD, "usb: discard packet (%d)\n", r);
 			continue;
 		}
 		if (swd_txn_status == TXN_STATUS_WAIT) {
@@ -254,7 +257,7 @@ restart:
 				process_async(data + 1, (r / 4) - 1);
 				pthread_mutex_lock(&swd_lock);
 			} else {
-				fprintf(stderr, "\r\nusb: rx: unexpected txn %08x (%d)\r\n",
+				xprintf(XSWD, "usb: rx: unexpected txn %08x (%d)\n",
 					data[0], r);
 			}
 		}
@@ -655,9 +658,11 @@ int swdp_reset(void) {
 	t.tx[t.txc++] = RSWD_MSG(CMD_ATTACH, 0, 0);
 	t.tx[t.txc++] = SWD_RD(DP_IDCODE, 1);
 	t.rx[t.rxc++] = &idcode;
-	q_exec(&t);
-
-	fprintf(stderr,"IDCODE: %08x\n", idcode);
+	if (q_exec(&t)) {
+		xprintf(XSWD, "attach: IDCODE: ????????\n");
+	} else {
+		xprintf(XSWD, "attach: IDCODE: %08x\n", idcode);
+	}
 
 	swd_error = 0;
 	q_init(&t);
@@ -678,7 +683,7 @@ int swdp_reset(void) {
 	if (q_exec(&t))
 		return -1;
 
-	fprintf(stderr,"DPCTRL: %08x\n", n);
+	xprintf(XSWD, "attach: DPCTRL: %08x\n", n);
 	return 0;
 }
 

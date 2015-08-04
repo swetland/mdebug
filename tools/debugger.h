@@ -1,7 +1,7 @@
 /* debugger.h
  *
  * Copyright 2011 Brian Swetland <swetland@frotz.net>
- * 
+ *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -18,8 +18,16 @@
 #ifndef _DEBUGGER_H_
 #define _DEBUGGER_H_
 
+typedef enum {
+	XDEFAULT,
+	XSWD,		// SWD transport & engine
+	XCORE,		// debugger core
+	XDATA,		// debugger command response
+	XGDB,		// messages from GDB bridge
+} xpchan;
+
 #define printf __use_xprintf_in_debugger__
-extern void xprintf(const char *fmt, ...);
+extern void xprintf(xpchan ch, const char *fmt, ...);
 
 #define ERROR		-1
 #define ERROR_UNKNOWN 	-2
