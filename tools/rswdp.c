@@ -1,7 +1,7 @@
 /* rswdp.c
  *
  * Copyright 2011 Brian Swetland <swetland@frotz.net>
- * 
+ *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -62,13 +62,15 @@ static int swd_txn_status = 0;
 // this by zeroing the usb handle and setting swd_online to 0
 // at which point the swd_thread may attempt to reconnect.
 
+#define MAXWORDS (8192/4)
+static unsigned swd_maxwords = 512;
+static unsigned swd_version = 0x0001;
+
 static int swd_error = 0;
 
 int swdp_error(void) {
 	return swd_error;
 }
-
-#define MAXWORDS 512
 
 struct txn {
 	/* words to transmit */
@@ -114,6 +116,53 @@ static void process_async(u32 *data, unsigned count) {
 	}
 }
 
+static void process_query(u32 *data, unsigned count) {
+	unsigned n;
+	const char *board = "unknown";
+	const char *build = "unknown";
+	unsigned version = 0x0005;
+	unsigned maxdata = 2048;
+
+	while (count-- > 0) {
+		unsigned msg = *data++;
+		switch (RSWD_MSG_CMD(msg)) {
+		case CMD_NULL:
+			break;
+		case CMD_BUILD_STR:
+			n = RSWD_MSG_ARG(msg);
+			if (n > count) goto done;
+			build = (void*) data;
+			data += n;
+			break;
+		case CMD_BOARD_STR:
+			n = RSWD_MSG_ARG(msg);
+			if (n > count) goto done;
+			board = (void*) data;
+			data += n;
+			break;
+		case CMD_VERSION:
+			version = RSWD_MSG_ARG(msg);
+			break;
+		case CMD_RX_MAXDATA:
+			maxdata = RSWD_MSG_ARG(msg);
+			break;
+		default:
+			goto done;
+		}
+	}
+done:
+	if (maxdata > (MAXWORDS * 4)) {
+		maxdata = MAXWORDS * 4;
+	}
+	xprintf(XSWD, "usb: board id: %s\n", board);
+	xprintf(XSWD, "usb: build id: %s\n", build);
+	xprintf(XSWD, "usb: protocol: %d.%d\n", version >> 8, version & 0xff);
+	xprintf(XSWD, "usb: max data: %d byte rx buffer\n", maxdata);
+
+	swd_version = version;
+	swd_maxwords = maxdata / 4;
+}
+
 static int process_reply(struct txn *t, u32 *data, int count) {
 	unsigned msg, op, n, rxp, rxc;
 
@@ -147,6 +196,9 @@ static int process_reply(struct txn *t, u32 *data, int count) {
 			} else {
 				return 0;
 			}
+		case CMD_CLOCK_KHZ:
+			xprintf(XSWD,"mdebug: SWD clock: %d KHz\n", n);
+			continue;
 		default:
 			xprintf(XSWD,"unknown command 0x%02x\n", RSWD_MSG_CMD(msg));
 			return -1;
@@ -156,7 +208,7 @@ static int process_reply(struct txn *t, u32 *data, int count) {
 }
 
 static int q_exec(struct txn *t) {
-	unsigned data[1028];
+	unsigned data[MAXWORDS];
 	unsigned seq;
 	int r;
 	u32 id;
@@ -170,7 +222,7 @@ static int q_exec(struct txn *t) {
 	/* If we are a multiple of 64, and not exactly 4K,
 	 * add padding to ensure the target can detect the end of txn
 	 */
-	if (((t->txc % 16) == 0) && (t->txc != MAXWORDS))
+	if (((t->txc % 16) == 0) && (t->txc != swd_maxwords))
 		t->tx[t->txc++] = RSWD_MSG(CMD_NULL, 0, 0);
 
 	pthread_mutex_lock(&swd_lock);
@@ -215,7 +267,8 @@ static int q_exec(struct txn *t) {
 }
 
 static void *swd_reader(void *arg) {
-	unsigned data[1024];
+	uint32_t data[MAXWORDS];
+	unsigned query_id;
 	int r;
 	int once = 1;
 restart:
@@ -230,11 +283,19 @@ restart:
 	}
 	once = 0;
 	xprintf(XSWD, "usb: debugger connected\n");
+
 	pthread_mutex_lock(&swd_lock);
-	swd_online = 1;
+
+	// send a version query to find out about the firmware
+	// old m3debug fw will just report failure
+ 	query_id = sequence++;
+	query_id = RSWD_TXN_START(query_id);
+	data[0] = query_id;
+	data[1] = RSWD_MSG(CMD_VERSION, 0, RSWD_VERSION);
+	usb_write(usb, data, 8);
 	for (;;) {
 		pthread_mutex_unlock(&swd_lock);
-		r = usb_read_forever(usb, data, 4096);
+		r = usb_read_forever(usb, data, MAXWORDS * 4);
 		pthread_mutex_lock(&swd_lock);
 		if (r < 0) {
 			xprintf(XSWD, "usb: debugger disconnected\n");
@@ -247,7 +308,11 @@ restart:
 			xprintf(XSWD, "usb: discard packet (%d)\n", r);
 			continue;
 		}
-		if (swd_txn_status == TXN_STATUS_WAIT) {
+		if (query_id && (data[0] == query_id)) {
+			query_id = 0;
+			process_query(data + 1, (r / 4) - 1);
+			swd_online = 1;
+		} else if (swd_txn_status == TXN_STATUS_WAIT) {
 			if (data[0] == swd_txn_id) {
 				swd_txn_status = r;
 				memcpy(swd_txn_data, data, r);
@@ -393,7 +458,7 @@ int swdp_ahb_write32(u32 addr, u32 *in, int count) {
 	return 0;
 }
 #else
-#define MAXDATAWORDS (MAXWORDS - 16)
+#define MAXDATAWORDS (swd_maxwords - 16)
 /* 10 txns overhead per 128 read txns - 126KB/s on 72MHz STM32F
  * 8 txns overhead per 128 write txns - 99KB/s on 72MHz STM32F
  */
