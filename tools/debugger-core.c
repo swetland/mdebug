@@ -449,6 +449,13 @@ int debugger_command(char *line) {
 	unsigned c, n = 0;
 	int r;
 
+	while (*line && (*line == ' ')) line++;
+
+	if (*line == '/') {
+		arg[0].s = line + 1;
+		return _debugger_exec("wconsole", 1, arg);
+	}
+
 	while ((c = *line)) {
 		if (c <= ' ') {
 			line++;

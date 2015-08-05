@@ -815,6 +815,35 @@ int do_threads(int argc, param *argv) {
 	return 0;
 }
 
+int remote_msg(u32 cmd) {
+	unsigned timeout = 250;
+	u32 n = 0;
+	if (swdp_ahb_write(DCRDR, cmd)) return -1;
+	if (swdp_ahb_read(DEMCR, &n)) return -1;
+	if (swdp_ahb_write(DEMCR, n | DEMCR_MON_PEND)) return -1;
+	while (timeout > 0) {
+		if (swdp_ahb_read(DCRDR, &n)) return -1;
+		if (!(n & 0x80000000)) return 0;
+		timeout--;
+	}
+	return -1;
+}
+
+int do_wconsole(int argc, param *argv) {
+	if (argc != 1) return -1;
+	const char *line = argv[0].s;
+	while (*line) {
+		if (remote_msg(0x80000000 | *line)) goto oops;
+		line++;
+	}
+	if (remote_msg(0x80000000 | '\n')) goto oops;
+	return 0;
+oops:
+	xprintf(XCORE, "console write failed\n");
+	return -1;
+}
+
+
 struct debugger_command debugger_commands[] = {
 	{ "exit",	"", do_exit,		"" },
 	{ "attach",	"", do_attach,		"attach/reattach to sw-dp" },
@@ -847,6 +876,7 @@ struct debugger_command debugger_commands[] = {
 	{ "arch",	"", do_setarch,		"set architecture for flash agent" },
 	{ "threads",	"", do_threads,		"thread dump" },
 	{ "text",	"", do_text,		"dump text" },
+	{ "wconsole",	"", do_wconsole,	"write to remote console" },
 	{ "help",	"", do_help,		"help" },
 	{ 0, 0, 0, 0 },
 };
