@@ -62,6 +62,7 @@ void swdp_target_reset(int enable);
 
 int swdp_bootloader(void);
 int swdp_set_clock(unsigned khz);
+int swo_set_clock(unsigned khz);
 
 #endif
 

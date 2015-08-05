@@ -89,18 +89,18 @@ struct txn {
 	unsigned magic;
 };
 
+void process_swo_data(void *data, unsigned count);
+
 static void process_async(u32 *data, unsigned count) {
 	unsigned msg, n;
 	u32 tmp;
-
 	while (count-- > 0) {
 		msg = *data++;
 		switch (RSWD_MSG_CMD(msg)) {
 		case CMD_NULL:
 			continue;
 		case CMD_DEBUG_PRINT:
-		    //op = RSWD_MSG_OP(msg);
-		    n = RSWD_MSG_ARG(msg);
+			n = RSWD_MSG_ARG(msg);
 			if (n > count)
 				return;
 			tmp = data[n];
@@ -110,6 +110,13 @@ static void process_async(u32 *data, unsigned count) {
 			data += n;
 			count -= n;
 			break;
+		case CMD_SWO_DATA:
+			n = RSWD_MSG_ARG(msg);
+			if (n > count)
+				return;
+			process_swo_data(data, n * 4);
+			data += n;
+			count -= n;
 		default:
 			return;
 		}
@@ -312,19 +319,17 @@ restart:
 			query_id = 0;
 			process_query(data + 1, (r / 4) - 1);
 			swd_online = 1;
-		} else if (swd_txn_status == TXN_STATUS_WAIT) {
-			if (data[0] == swd_txn_id) {
-				swd_txn_status = r;
-				memcpy(swd_txn_data, data, r);
-				pthread_cond_broadcast(&swd_event);
-			} else if (data[0] == RSWD_TXN_ASYNC) {
-				pthread_mutex_unlock(&swd_lock);
-				process_async(data + 1, (r / 4) - 1);
-				pthread_mutex_lock(&swd_lock);
-			} else {
-				xprintf(XSWD, "usb: rx: unexpected txn %08x (%d)\n",
-					data[0], r);
-			}
+		} else if (data[0] == RSWD_TXN_ASYNC) {
+			pthread_mutex_unlock(&swd_lock);
+			process_async(data + 1, (r / 4) - 1);
+			pthread_mutex_lock(&swd_lock);
+		} else if ((swd_txn_status == TXN_STATUS_WAIT) &&
+			(data[0] == swd_txn_id)) {
+			swd_txn_status = r;
+			memcpy(swd_txn_data, data, r);
+			pthread_cond_broadcast(&swd_event);
+		} else {
+			xprintf(XSWD, "usb: rx: unexpected txn %08x (%d)\n", data[0], r);
 		}
 	}
 	// wait for a reader to ack the shutdown (and close usb)
@@ -790,6 +795,17 @@ int swdp_set_clock(unsigned khz) {
 		khz = 1000;
 	q_init(&t);
 	t.tx[t.txc++] = RSWD_MSG(CMD_SET_CLOCK, 0, khz);
+	return q_exec(&t);
+}
+
+int swo_set_clock(unsigned khz) {
+	struct txn t;
+	if (khz > 0xFFFF)
+		return -1;
+	if (khz < 1000)
+		khz = 1000;
+	q_init(&t);
+	t.tx[t.txc++] = RSWD_MSG(CMD_SWO_CLOCK, 0, khz);
 	return q_exec(&t);
 }
 

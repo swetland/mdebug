@@ -409,6 +409,12 @@ int do_setclock(int argc, param *argv) {
 	return swdp_set_clock(argv[0].n);
 }
 
+int do_swoclock(int argc, param *argv) {
+	if (argc < 1)
+		return -1;
+	return swo_set_clock(argv[0].n);
+}
+
 int do_help(int argc, param *argv) {
 	struct debugger_command *cmd;
 	for (cmd = debugger_commands; cmd->func != NULL; cmd++) {
@@ -836,7 +842,8 @@ struct debugger_command debugger_commands[] = {
 	{ "print",	"", do_print,		"print numeric arguments" },
 	{ "echo",	"", do_echo,		"echo command line" },
 	{ "bootloader", "", do_bootloader,	"reboot into bootloader" },
-	{ "setclock",	"", do_setclock,	"set clock rate (khz)" },
+	{ "setclock",	"", do_setclock,	"set SWD clock rate (khz)" },
+	{ "swoclock",	"", do_swoclock,	"set SWO clock rate (khz)" },
 	{ "arch",	"", do_setarch,		"set architecture for flash agent" },
 	{ "threads",	"", do_threads,		"thread dump" },
 	{ "text",	"", do_text,		"dump text" },
