@@ -73,6 +73,13 @@ usb_handle *usb_open(unsigned vid, unsigned pid, unsigned ifc) {
 		goto close_fail;
 	}
 
+#ifdef __APPLE__
+	// make sure everyone's data toggles agree
+	// makes things worse on Linux, but happy on OSX
+	libusb_clear_halt(usb->dev, usb->ei);
+	libusb_clear_halt(usb->dev, usb->eo);
+#endif
+
 	return usb;
 
 close_fail:
