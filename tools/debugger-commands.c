@@ -818,14 +818,18 @@ int do_threads(int argc, param *argv) {
 int remote_msg(u32 cmd) {
 	unsigned timeout = 250;
 	u32 n = 0;
-	if (swdp_ahb_write(DCRDR, cmd)) return -1;
-	if (swdp_ahb_read(DEMCR, &n)) return -1;
-	if (swdp_ahb_write(DEMCR, n | DEMCR_MON_PEND)) return -1;
+	if (swdp_ahb_write(DCRDR, cmd)) goto fail;
+	if (swdp_ahb_read(DEMCR, &n)) goto fail;
+	if (swdp_ahb_write(DEMCR, n | DEMCR_MON_PEND)) goto fail;
 	while (timeout > 0) {
-		if (swdp_ahb_read(DCRDR, &n)) return -1;
+		if (swdp_ahb_read(DCRDR, &n)) goto fail;
 		if (!(n & 0x80000000)) return 0;
 		timeout--;
 	}
+	xprintf(XCORE, "console write timeout\n");
+	return -1;
+fail:
+	xprintf(XCORE, "console write io error\n");
 	return -1;
 }
 
@@ -833,14 +837,11 @@ int do_wconsole(int argc, param *argv) {
 	if (argc != 1) return -1;
 	const char *line = argv[0].s;
 	while (*line) {
-		if (remote_msg(0x80000000 | *line)) goto oops;
+		if (remote_msg(0x80000000 | *line)) return -1;
 		line++;
 	}
-	if (remote_msg(0x80000000 | '\n')) goto oops;
+	if (remote_msg(0x80000000 | '\r')) return -1;
 	return 0;
-oops:
-	xprintf(XCORE, "console write failed\n");
-	return -1;
 }
 
 
