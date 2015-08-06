@@ -51,6 +51,8 @@
 #define DFSR_EXTERNAL		(1 << 4)
 #define DFSR_MASK		0x1F
 
+extern int swd_verbose;
+
 static void m_event(const char *evt) {
 	xprintf(XCORE, "DEBUG EVENT: %s\n", evt);
 }
@@ -82,12 +84,16 @@ void debugger_lock() {
 #endif
 		swdp_reset();
 	}
+	swd_verbose = 1;
 }
 
 void debugger_unlock() {
+#if 0
 	if (swdp_error()) {
 		xprintf(XCORE, "SWD ERROR\n");
 	}
+#endif
+	swd_verbose = 0;
 	pthread_mutex_unlock(&_dbg_lock);
 }
 

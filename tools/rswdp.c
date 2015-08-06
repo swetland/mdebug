@@ -31,6 +31,8 @@
 
 #include <debugger.h>
 
+int swd_verbose = 0;
+
 static volatile int ATTN;
 
 void swdp_interrupt(void) {
@@ -170,6 +172,17 @@ done:
 	swd_maxwords = maxdata / 4;
 }
 
+const char *swd_err_str(unsigned op) {
+	switch (op) {
+	case ERR_NONE: return "NONE";
+	case ERR_INTERNAL: return "INTERNAL";
+	case ERR_TIMEOUT: return "TIMEOUT";
+	case ERR_IO: return "IO";
+	case ERR_PARITY: return "PARITY";
+	default: return "UNKNOWN";
+	}
+}
+
 static int process_reply(struct txn *t, u32 *data, int count) {
 	unsigned msg, op, n, rxp, rxc;
 
@@ -198,6 +211,9 @@ static int process_reply(struct txn *t, u32 *data, int count) {
 			continue;
 		case CMD_STATUS:
 			if (op) {
+				if (swd_verbose) {
+					xprintf(XSWD, "SWD ERROR: %s\n", swd_err_str(op));
+				}
 				swd_error = -op;
 				return -op;
 			} else {
