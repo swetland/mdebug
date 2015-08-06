@@ -27,6 +27,12 @@ stm32f2xx MCUs.
 Everything is either Apache 2 or BSD licensed, to allow for easy,
 no-strings-attached, inclusion in your own projects.  Share and enjoy!
 
+Firmware for the LPC Link 2 and installation instructions are in the
+firmware directory.  Firmware source code is part of the lk embedded
+kernel project (look in app/mdebug):
+https://github.com/travisg/lk
+https://github.com/travisg/lk/tree/master/app/mdebug
+
 
 Included Third Party Software
 -----------------------------
