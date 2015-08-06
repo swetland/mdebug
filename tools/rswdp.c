@@ -296,6 +296,7 @@ static void *swd_reader(void *arg) {
 	int once = 1;
 restart:
 	for (;;) {
+		if ((usb = usb_open(0x1209, 0x5038, 0))) break;
 		if ((usb = usb_open(0x18d1, 0xdb03, 0))) break;
 		if ((usb = usb_open(0x18d1, 0xdb04, 0))) break;
 		if (once) {
