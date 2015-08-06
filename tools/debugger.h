@@ -24,6 +24,7 @@ typedef enum {
 	XCORE,		// debugger core
 	XDATA,		// debugger command response
 	XGDB,		// messages from GDB bridge
+	XREMOTE,	// remote console messages
 } xpchan;
 
 #define printf __use_xprintf_in_debugger__

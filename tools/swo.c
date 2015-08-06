@@ -37,11 +37,11 @@ static void handle_swv_src(unsigned id, unsigned val, unsigned n) {
 		console_data[console_ptr++] = val;
 		if (val == '\n') {
 			console_data[console_ptr] = 0;
-			xprintf(XDATA, "[remote] %s", console_data);
+			xprintf(XREMOTE, "[remote] %s", console_data);
 			console_ptr = 0;
 		} else if (console_ptr == 254) {
 			console_data[console_ptr] = 0;
-			xprintf(XDATA, "[remote] %s\n", console_data);
+			xprintf(XREMOTE, "[remote] %s\n", console_data);
 		}
 	}
 }

@@ -11,12 +11,15 @@ M_OBJS += tools/socket.o
 M_OBJS += tools/gdb-bridge.o
 M_OBJS += tools/lkdebug.o
 M_OBJS += tools/swo.o
+M_OBJS += tools/websocket.o
+M_OBJS += tools/sha1.o
+M_OBJS += tools/base64.o
 M_OBJS += out/debugger-builtins.o
 $(call build-host-executable)
 
 out/debugger-builtins.c: $(AGENTS) bin/mkbuiltins
 	@mkdir -p out
-	./bin/mkbuiltins $(AGENTS) > $@	
+	./bin/mkbuiltins $(AGENTS) > $@
 
 M_NAME := stm32boot
 M_OBJS := tools/stm32boot.o
@@ -40,7 +43,7 @@ M_NAME := lpcboot
 M_OBJS := tools/lpcboot.o tools/usb.o
 $(call build-host-executable)
 
-M_NAME := uconsole 
+M_NAME := uconsole
 M_OBJS := tools/uconsole.o tools/usb.o
 $(call build-host-executable)
 

@@ -20,6 +20,9 @@ SRCS := tools/debugger.c \
 	tools/rswdp.c \
 	tools/socket.c \
 	tools/swo.c \
+	tools/websocket.c \
+	tools/base64.c \
+	tools/sha1.c \
 	tools/usb.c
 
 ifneq ($(TOOLCHAIN),)

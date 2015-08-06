@@ -22,6 +22,7 @@
 #include <string.h>
 #include <ctype.h>
 #include <stdarg.h>
+#include <errno.h>
 
 #include <pthread.h>
 #include <sys/socket.h>
@@ -30,6 +31,8 @@
 #include <protocol/rswdp.h>
 #include "debugger.h"
 #include "rswdp.h"
+
+#include "websocket.h"
 
 #define DHCSR_C_DEBUGEN		(1 << 0)
 #define DHCSR_C_HALT		(1 << 1)
@@ -53,6 +56,10 @@
 
 extern int swd_verbose;
 
+#define GDB_SOCKET	5555
+#define SWO_SOCKET	2332
+#define WEB_SOCKET	5557
+
 static void m_event(const char *evt) {
 	xprintf(XCORE, "DEBUG EVENT: %s\n", evt);
 }
@@ -74,6 +81,13 @@ static void monitor(void) {
 
 static pthread_mutex_t _dbg_lock = PTHREAD_MUTEX_INITIALIZER;
 static pthread_t _dbg_thread;
+static pthread_t _gdb_thread;
+
+static pthread_mutex_t _swo_lock = PTHREAD_MUTEX_INITIALIZER;
+static pthread_t _swo_thread;
+static pthread_t _ws_thread;
+static int swo_fd = -1;
+static ws_server_t *_ws = NULL;
 
 void debugger_lock() {
 	pthread_mutex_lock(&_dbg_lock);
@@ -109,11 +123,10 @@ void *debugger_monitor(void *arg) {
 void gdb_server(int fd);
 int socket_listen_tcp(unsigned port);
 
-static pthread_t _listen_master;
 void *gdb_listener(void *arg) {
 	int fd;
-	if ((fd = socket_listen_tcp(5555)) < 0) {
-		xprintf(XGDB, "gdb_listener() cannot bind to 5555\n");
+	if ((fd = socket_listen_tcp(GDB_SOCKET)) < 0) {
+		xprintf(XGDB, "gdb_listener() cannot bind to %d\n", GDB_SOCKET);
 		return NULL;
 	}
 	for (;;) {
@@ -126,9 +139,90 @@ void *gdb_listener(void *arg) {
 	return NULL;
 }
 
+void transmit_swo_data(void *data, unsigned len) {
+	pthread_mutex_lock(&_swo_lock);
+	if (swo_fd >= 0) {
+		if (write(swo_fd, data, len)) ;
+	}
+	if (_ws != NULL) {
+		unsigned char *x = data;
+		x--;
+		*x = 3; // SWO DATA MARKER
+		ws_send_binary(_ws, x, len + 1);
+	}
+	pthread_mutex_unlock(&_swo_lock);
+}
+
+void *swo_listener(void *arg) {
+	char buf[1024];
+	int fd;
+	if ((fd = socket_listen_tcp(SWO_SOCKET)) < 0) {
+		xprintf(XCORE, "swo_listener() cannot bind to %d\n", SWO_SOCKET);
+		return NULL;
+	}
+	for (;;) {
+		int s = accept(fd, NULL, NULL);
+		if (s >= 0) {
+			xprintf(XCORE, "[ swo listener connected ]\n");
+			pthread_mutex_lock(&_swo_lock);
+			swo_fd = s;
+			pthread_mutex_unlock(&_swo_lock);
+			for (;;) {
+				int r = read(s, buf, 1024);
+				if (r < 0) {
+					if (errno != EINTR) break;
+				}
+				if (r == 0) break;
+			}
+			pthread_mutex_lock(&_swo_lock);
+			swo_fd = -1;
+			pthread_mutex_unlock(&_swo_lock);
+			close(s);
+			xprintf(XCORE, "[ swo listener disconnected ]\n");
+		}
+	}
+	return NULL;
+}
+
+static void ws_message(unsigned op, void *msg, size_t len, void *cookie) {
+}
+
+void *ws_listener(void *arg) {
+	ws_server_t *ws;
+	int fd;
+	if ((fd = socket_listen_tcp(WEB_SOCKET)) < 0) {
+		xprintf(XCORE, "websocket cannot bind to %d\n", WEB_SOCKET);
+		return NULL;
+	}
+	for (;;) {
+		int s = accept(fd, NULL, NULL);
+		if (s >= 0) {
+			ws = ws_handshake(s, ws_message, NULL);
+			if (ws) {
+				xprintf(XCORE, "[ websocket connected ]\n");
+			} else {
+				xprintf(XCORE, "[ websocket handshake failed ]\n");
+				continue;
+			}
+			pthread_mutex_lock(&_swo_lock);
+			_ws = ws;
+			pthread_mutex_unlock(&_swo_lock);
+			ws_process_messages(ws);
+			pthread_mutex_lock(&_swo_lock);
+			_ws = NULL;
+			pthread_mutex_unlock(&_swo_lock);
+			ws_close(ws);
+			xprintf(XCORE, "[ websocket disconnected ]\n");
+		}
+	}
+	return NULL;
+}
+
 void debugger_init() {
 	pthread_create(&_dbg_thread, NULL, debugger_monitor, NULL);
-	pthread_create(&_listen_master, NULL, gdb_listener, NULL);
+	pthread_create(&_gdb_thread, NULL, gdb_listener, NULL);
+	pthread_create(&_swo_thread, NULL, swo_listener, NULL);
+	pthread_create(&_ws_thread, NULL, ws_listener, NULL);
 }
 
 

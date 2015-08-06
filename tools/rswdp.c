@@ -92,6 +92,7 @@ struct txn {
 };
 
 void process_swo_data(void *data, unsigned count);
+void transmit_swo_data(void *data, unsigned count);
 
 static void process_async(u32 *data, unsigned count) {
 	unsigned msg, n;
@@ -117,6 +118,7 @@ static void process_async(u32 *data, unsigned count) {
 			if (n > count)
 				return;
 			process_swo_data(data, n * 4);
+			transmit_swo_data(data, n * 4);
 			data += n;
 			count -= n;
 		default:
