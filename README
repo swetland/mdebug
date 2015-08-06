@@ -1,64 +1,31 @@
 
 ===========================================================================
-          m3dev - tools for embedded ARM Cortex M3 development
+                mdebug - A debugger for Cortex-M MCUs
 ===========================================================================
 
-This project is a collection of (linux-centric) tools for working on
-small embedded systems based on the ARM Cortex M3 CPU.
+This is a debugger for Cortex-M MCUs using SWD (serial wire debug) and
+(optionally) SWO.  It provides basic standalone functionality including
+memory inspection and modification, processor halt, register inspection,
+single stepping, breakpoints, etc.  It also acts as a GDB agent, allowing
+GDB to control the target device.
 
-Original work was done with a STM32F103 part, and much more work has been
-done with LPC13xx series parts.
+Previously it used a custom debug probe board (m3debug).  In its current
+iteration firmware is provided for the readily available (and much more
+powerful) LPC Link 2 probe board, which is available from Digikey for
+under $20:
+http://www.digikey.com/product-detail/en/OM13054,598/568-10930-ND/
+
+It provides flashing functionality via "flash agents" which are little
+programs downloaded to the target board RAM and then controlled by the
+debugger.  Currently agents are included for the lpc13xx, lpc15xx,
+stm32f4xx series MCUs and the lpclink2 board itself (lpc43xx + spifi).
+
+Recently it's seem the most testing against stm32f4xx and lpc43xx MCUs.
+It has previously been used successfully with lpc13xx, lpc15xx, and
+stm32f2xx MCUs.
 
 Everything is either Apache 2 or BSD licensed, to allow for easy,
 no-strings-attached, inclusion in your own projects.  Share and enjoy!
-
-
-m3debug
--------
-
-Firmware for the "m3debug" and "super-m3debug" boards which use the
-LPC1343 as an engine for the ARM Serial Wire Debug Protocol, in 
-conjunction with the debugger and gdb-bridge programs (described
-below).
-
-A schematic is provided for the original (pretty simplistic) m3debug
-board.
-
-
-swdp 
-----
-
-Firmware for the LeafLabs Maple board to act as a USB<->SW-DP bridge,
-to allow host software to use Serial Wire Debug Protocol to access target
-devices.  It should be usable on just about any STM32F103 board.
-
-GPIO 0 -> SWDIO
-GPIO 1 -> SWCLK
-GPIO 5 -> Activity LED
-
-This was the original prototype and has not been tested in a looong
-time now.
-
-
-debugger & gdb-bridge
----------------------
-
-A simple standalone debugger and a bridge for the GDB remote protocol
-that commicate with a board running swdp.
-
-
-stm32boot
----------
-
-A tool to download code to RAM or flash, via the stm32f1xx ROM serial
-bootloader.
-
-
-usbmon
-------
-
-Commandline tool to observe the linux usb stack and io transactions
-through /dev/usbmon*
 
 
 Included Third Party Software
