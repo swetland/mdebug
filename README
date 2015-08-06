@@ -25,14 +25,27 @@ Recently it's seem the most testing against stm32f4xx and lpc43xx MCUs.
 It has previously been used successfully with lpc13xx, lpc15xx, and
 stm32f2xx MCUs.
 
-Everything is either Apache 2 or BSD licensed, to allow for easy,
-no-strings-attached, inclusion in your own projects.  Share and enjoy!
-
 Firmware for the LPC Link 2 and installation instructions are in the
 firmware directory.  Firmware source code is part of the lk embedded
 kernel project (look in app/mdebug):
 https://github.com/travisg/lk
 https://github.com/travisg/lk/tree/master/app/mdebug
+
+Everything is either Apache 2 or BSD licensed, to allow for easy,
+no-strings-attached, inclusion in your own projects.  Share and enjoy!
+
+Features
+--------
+
+* simple standalone interactive debugger
+* GDB stub/remote integration (default port localhost:5555)
+* simple and efficient remoted SWD transaction protocol
+* pretty fast: 450KB/s download to target w/ 8MHz SWD clock
+* simple flash agents: easy to add support for a new MCU or memory device
+* integration with LK for multi-threaded GDB debugging
+* supports console-over-SWO, and console-commands-over-SWD (with LK)
+* host software runs on Linux or OSX (Windows support not far off)
+* only external dependency is libusb 1.0
 
 
 Included Third Party Software
