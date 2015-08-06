@@ -48,6 +48,7 @@ extern int disassemble_thumb2(u32 addr, u16 op0, u16 op1,
 		char *text, int len) __attribute__ ((weak));
 
 int disassemble(u32 addr) {
+#if WITH_THUMB2_DISASSEMBLE
 	char text[128];
 	int r;
 	union {
@@ -55,7 +56,6 @@ int disassemble(u32 addr) {
 		u16 h[4];
 	} mem;
 
-#if WITH_THUMB2_DISASSEMBLE
 	if (!disassemble_thumb2)
 		return -1;
 

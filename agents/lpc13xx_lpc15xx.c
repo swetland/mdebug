@@ -16,7 +16,7 @@
 
 #include <agent/flash.h>
 
-#ifdef CONFIG_ARCH_LPC15XX
+#ifdef ARCH_LPC15XX
 #define LPC_IAP_FUNC	0x03000205
 #else
 #define LPC_IAP_FUNC	0x1fff1ff1
@@ -107,11 +107,11 @@ const flash_agent __attribute((section(".vectors"))) FlashAgent = {
 	.magic =	AGENT_MAGIC,
 	.version =	AGENT_VERSION,
 	.flags =	FLAG_BOOT_ROM_HACK,
-	.load_addr =	CONFIG_LOADADDR,
-	.data_addr =	CONFIG_LOADADDR + 0x400,
+	.load_addr =	LOADADDR,
+	.data_addr =	LOADADDR + 0x400,
 	.data_size =	0x1000,
-	.flash_addr =	CONFIG_FLASHADDR,
-	.flash_size =	CONFIG_FLASHSIZE,
+	.flash_addr =	FLASH_BASE,
+	.flash_size =	FLASH_SIZE,
 	.setup =	flash_agent_setup,
 	.erase =	flash_agent_erase,
 	.write =	flash_agent_write,

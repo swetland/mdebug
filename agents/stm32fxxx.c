@@ -17,14 +17,14 @@
 #include <agent/flash.h>
 #include <fw/io.h>
 
-#define FLASH_BASE		0x40023C00
-#define FLASH_ACR		(FLASH_BASE + 0x00)
+#define _FLASH_BASE		0x40023C00
+#define FLASH_ACR		(_FLASH_BASE + 0x00)
 
-#define FLASH_KEYR		(FLASH_BASE + 0x04)
+#define FLASH_KEYR		(_FLASH_BASE + 0x04)
 #define FLASH_KEYR_KEY1		0x45670123
 #define FLASH_KEYR_KEY2		0xCDEF89AB
 
-#define FLASH_SR		(FLASH_BASE + 0x0C)
+#define FLASH_SR		(_FLASH_BASE + 0x0C)
 #define FLASH_SR_BSY		(1 << 16)
 #define FLASH_SR_PGSERR		(1 << 7) // sequence error
 #define FLASH_SR_PGPERR		(1 << 6) // parallelism error
@@ -34,7 +34,7 @@
 #define FLASH_SR_ERRMASK	0xF2
 #define FLASH_SR_EOP		(1 << 0) // end of operation
 
-#define FLASH_CR		(FLASH_BASE + 0x10)
+#define FLASH_CR		(_FLASH_BASE + 0x10)
 #define FLASH_CR_LOCK		(1 << 31)
 #define FLASH_CR_ERRIE		(1 << 25) // error irq en
 #define FLASH_CR_EOPIE		(1 << 24) // end of op irq en
@@ -129,11 +129,11 @@ const flash_agent __attribute((section(".vectors"))) FlashAgent = {
 	.magic =	AGENT_MAGIC,
 	.version =	AGENT_VERSION,
 	.flags =	0,
-	.load_addr =	CONFIG_LOADADDR,
-	.data_addr =	CONFIG_LOADADDR + 0x400,
+	.load_addr =	LOADADDR,
+	.data_addr =	LOADADDR + 0x400,
 	.data_size =	0x8000,
-	.flash_addr =	CONFIG_FLASHADDR,
-	.flash_size =	CONFIG_FLASHSIZE,
+	.flash_addr =	FLASH_BASE,
+	.flash_size =	FLASH_SIZE,
 	.setup =	flash_agent_setup,
 	.erase =	flash_agent_erase,
 	.write =	flash_agent_write,

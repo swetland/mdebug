@@ -1,58 +1,79 @@
-## Copyright 2014 Brian Swetland <swetland@frotz.net>
-## 
-## Licensed under the Apache License, Version 2.0 (the "License");
-## you may not use this file except in compliance with the License.
-## You may obtain a copy of the License at
-##
-##     http://www.apache.org/licenses/LICENSE-2.0
-##
-## Unless required by applicable law or agreed to in writing, software
-## distributed under the License is distributed on an "AS IS" BASIS,
-## WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-## See the License for the specific language governing permissions and
-## limitations under the License.
 
-# configuration header generation heavily inspired by travisg's lk build system
+what_to_build:: all
 
-# $(call chip,name,arch,rambase,ramsize,rombase,romsize,linkscript)
-define chip
-$(eval CHIP_$1_ARCH := $2) \
-$(eval CHIP_$1_RAMBASE := $3) \
-$(eval CHIP_$1_RAMSIZE := $4) \
-$(eval CHIP_$1_ROMBASE := $5) \
-$(eval CHIP_$1_ROMSIZE := $6) \
-$(eval CHIP_$1_LINKSCRIPT := build/generic-$7.ld) \
-$(eval CHIP_$1_DEPS := $(lastword $(MAKEFILE_LIST)))
+-include local.mk
+
+#TOOLCHAIN ?= arm-none-eabi-
+
+TARGET_CC := $(TOOLCHAIN)gcc
+TARGET_OBJCOPY := $(TOOLCHAIN)objcopy
+TARGET_OBJDUMP := $(TOOLCHAIN)objdump
+
+TARGET_CFLAGS := -g -Os -Wall
+TARGET_CFLAGS += -Wno-unused-but-set-variable
+TARGET_CFLAGS += -I. -Iinclude
+TARGET_CFLAGS += -mcpu=cortex-m3 -mthumb -mthumb-interwork
+TARGET_CFLAGS += -ffunction-sections -fdata-sections 
+TARGET_CFLAGS += -fno-builtin -nostdlib
+
+# tell gcc there's not a full libc it can depend on
+# so it won't do thinks like printf("...") -> puts("...")
+TARGET_CFLAGS += -ffreestanding
+
+QUIET := @
+
+UNAME := $(shell uname)
+UNAME_M := $(shell uname -m)
+
+HOST_CFLAGS := -g -O1 -Wall
+HOST_CFLAGS += -Itools -Iinclude
+HOST_CFLAGS += -DLINENOISE_INTERRUPTIBLE
+
+ifeq ($(UNAME),Darwin)
+HOST_CFLAGS += -I/opt/local/include -L/opt/local/lib
+HOST_LIBS += -lusb-1.0
+endif
+ifeq ($(UNAME),Linux)
+HOST_LIBS += -lusb-1.0 -lpthread -lrt
+endif
+
+AGENTS :=
+ALL :=
+DEPS :=
+
+out/agent-%.bin: out/agent-%.elf
+	@mkdir -p $(dir $@)
+	@echo generate $@
+	$(QUIET)$(TARGET_OBJCOPY) -O binary $< $@
+
+out/agent-%.lst: out/agent-%.elf
+	@mkdir -p $(dir $@)
+	@echo generate $@
+	$(QUIET)$(TARGET_OBJDUMP) -d $< > $@
+
+out/agent-%.elf: agents/%.c
+	@mkdir -p $(dir $@)
+	@echo compile $@
+	$(QUIET)$(TARGET_CC) $(TARGET_CFLAGS) -Wl,--script=build/agent.ld -Wl,-Ttext=$(LOADADDR) -o $@ $<
+
+out/%.o: %.c
+	@mkdir -p $(dir $@)
+	@echo compile $<
+	$(QUIET)gcc -MMD -MP -c $(HOST_CFLAGS) -o $@ $< 
+
+define _program
+ALL += bin/$1
+DEPS += $3
+bin/$1: $2
+	@mkdir -p $$(dir $$@)
+	@echo link $$@
+	$(QUIET)gcc -o $$@ $2 $(HOST_LIBS)
 endef
 
-MKDIR = if [ ! -d $(dir $@) ]; then mkdir -p $(dir $@); fi
+program = $(eval $(call _program,$1,$(patsubst %.c,out/%.o,$2),$(patsubst %.c,out/%.d,$2)))
 
-QUIET ?= @
-
-SPACE :=
-SPACE +=
-COMMA := ,
-
-define underscorify
-$(subst /,_,$(subst \,_,$(subst .,_,$(subst -,_,$1))))
-endef
-
-define toupper
-$(subst a,A,$(subst b,B,$(subst c,C,$(subst d,D,$(subst e,E,$(subst f,F,$(subst g,G,$(subst h,H,$(subst i,I,$(subst j,J,$(subst k,K,$(subst l,L,$(subst m,M,$(subst n,N,$(subst o,O,$(subst p,P,$(subst q,Q,$(subst r,R,$(subst s,S,$(subst t,T,$(subst u,U,$(subst v,V,$(subst w,W,$(subst x,X,$(subst y,Y,$(subst z,Z,$1))))))))))))))))))))))))))
-endef
-
-# (call make-config-header,outfile,configlist)
-define make-config-header
-echo "/* Machine Generated File - Do Not Edit */" >> $1.tmp ; \
-echo "#ifndef __$(call underscorify,$1)" >> $1.tmp ; \
-echo "#define __$(call underscorify,$1)" >> $1.tmp ; \
-$(foreach def,$2,echo "#define CONFIG_$(subst =, ,$(call underscorify,$(call toupper,$(def))))" >> $1.tmp ;) \
-echo "#endif" >> $1.tmp ; \
-mv $1.tmp $1
-endef
-
-start-module-mk = $(eval M_MAKEFILE := $(lastword $(MAKEFILE_LIST)))
-build-target-agent = $(eval include build/target-agent.mk)
-build-target-executable = $(eval include build/target-executable.mk)
-build-host-executable = $(eval include build/host-executable.mk)
+agent = $(eval AGENTS += $(strip $1))\
+$(eval ALL += $(patsubst %,out/agent-%.bin,$(strip $1)))\
+$(eval ALL += $(patsubst %,out/agent-%.lst,$(strip $1)))\
+$(eval out/agent-$(strip $1).elf: LOADADDR := $(strip $2))
 
