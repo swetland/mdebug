@@ -54,16 +54,8 @@ ARM DDI0337E Cortex M3 r1p1 Technical Reference Manual
 Historical Notes
 ----------------
 
-The original work on this started in 2011 and has been tinkered with
-on a number of repositories by a number of people.  Trying to fold things
-back together and tidy up the build system, etc, ended up being a bit of
-a mess resulting in Brian declaring "history bankruptcy" and starting
-a fresh repository in 2014.
+This work is an extension of the older m3dev project, but only brings
+the debugger tools foward.  The embedded firmware stuff lives on in
+m3dev and the next-gen firmware is part of lk.
 
-Some random side projects have been removed.  An AUTHORS file has been
-added to provide credit for additional contributors to the codebase.
-
-The code base as of the initial checkin, built with gcc 4.8.2 and
-binutils 2.24 (http://github.com/travisg/toolchains) is verified to
-be able to use a m3debug board to flash the bootloader and app image
-to another m3debug board, which then can repeat the process.
+https://github.com/swetland/m3dev

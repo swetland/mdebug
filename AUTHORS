@@ -1,8 +1,0 @@
-Brian Swetland <swetland@frotz.net>
-  Created this mess in the first place.  Trying to tidy it up a bit.
-
-Travis Geiselbrecht <geist@foobox.com>
-  Build system wisdom, bugfixes, and the "super-m3debug" variant.
-
-Erik Gilling <konkers@konkers.net>
-  lpc134[567] support, library enhancements, and more bugfixes.
