@@ -13,7 +13,7 @@ TARGET_CFLAGS := -g -Os -Wall
 TARGET_CFLAGS += -Wno-unused-but-set-variable
 TARGET_CFLAGS += -I. -Iinclude
 TARGET_CFLAGS += -mcpu=cortex-m3 -mthumb -mthumb-interwork
-TARGET_CFLAGS += -ffunction-sections -fdata-sections 
+TARGET_CFLAGS += -ffunction-sections -fdata-sections
 TARGET_CFLAGS += -fno-builtin -nostdlib
 
 # tell gcc there's not a full libc it can depend on
@@ -67,7 +67,7 @@ DEPS += $3
 bin/$1: $2
 	@mkdir -p $$(dir $$@)
 	@echo link $$@
-	$(QUIET)gcc -o $$@ $2 $(HOST_LIBS)
+	$(QUIET)gcc $(HOST_CFLAGS) -o $$@ $2 $(HOST_LIBS)
 endef
 
 program = $(eval $(call _program,$1,$(patsubst %.c,out/%.o,$2),$(patsubst %.c,out/%.d,$2)))
