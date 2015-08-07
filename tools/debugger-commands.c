@@ -1,7 +1,7 @@
 /* debugger-commands.);
  *
  * Copyright 2011 Brian Swetland <swetland@frotz.net>
- * 
+ *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -21,6 +21,7 @@
 #include <string.h>
 #include <ctype.h>
 #include <stdarg.h>
+#include <errno.h>
 
 #include <fcntl.h>
 #include <sys/time.h>
@@ -445,6 +446,61 @@ fail:
 	return NULL;
 }
 
+int do_upload(int argc, param *argv) {
+	u32 addr;
+	size_t sz;
+	long long t0, t1;
+	int fd, r;
+	void *data;
+	char *x;
+
+	if (argc != 3) {
+		xprintf(XCORE, "error: usage: upload <file> <addr> <length>\n");
+		return -1;
+	}
+
+	if ((fd = open(argv[0].s, O_CREAT | O_TRUNC | O_WRONLY, 0644)) < 0) {
+		xprintf(XCORE, "error: cannot open '%s'\n", argv[0].s);
+		return -1;
+	}
+	addr = argv[1].n;
+	sz = argv[2].n;
+	addr = (addr + 3) & ~3;
+	sz = (sz + 3) & ~3;
+
+	if ((data = malloc(sz)) == NULL) {
+		xprintf(XCORE, "out of memory\n");
+		close(fd);
+		return -1;
+	}
+
+	xprintf(XCORE, "reading %d bytes...\n", sz);
+	t0 = now();
+	if (swdp_ahb_read32(addr, (void*) data, sz / 4)) {
+		xprintf(XCORE, "error: failed to read data\n");
+		free(data);
+		close(fd);
+		return -1;
+	}
+	t1 = now();
+	xprintf(XCORE, "%lld uS -> %lld B/s\n", (t1 - t0),
+		(((long long)sz) * 1000000LL) / (t1 - t0));
+
+	x = data;
+	while (sz > 0) {
+		r = write(fd, x, sz);
+		if (r < 0) {
+			if (errno == EINTR) continue;
+			xprintf(XCORE, "write error\n");
+			break;
+		}
+		x += r;
+		sz -= r;
+	}
+	close(fd);
+	free(data);
+	return 0;
+}
 int do_download(int argc, param *argv) {
 	u32 addr;
 	void *data;
@@ -858,6 +914,7 @@ struct debugger_command debugger_commands[] = {
 	{ "dr",		"", do_dr,		"dump register" },
 	{ "wr",		"", do_wr,		"write register" },
 	{ "download",	"", do_download,	"download file to device" },
+	{ "upload",	"", do_upload,		"upload device memory to file" },
 	{ "run",	"", do_run,		"download file and execute it" },
 	{ "flash",	"", do_flash,		"write file to device flash" },
 	{ "erase",	"", do_erase,		"erase flash" },
