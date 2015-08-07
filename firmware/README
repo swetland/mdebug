@@ -1,9 +1,17 @@
-You'll need to build the lpcboot and debugger tools by
-running make at the top level first.
+Before you start
+----------------
+
+You'll need to build the lpcboot and debugger tools by running make at
+the top level first.
+
+On Linux you may need to install docs/99-mdebug.rules in /etc/udev/rules.d
+in order to have access to the debugger firmware and bootloader firmware
+without being root.  This rules file allows group plugdev access, which
+covers users logged in on console (at least on Ubuntu)
 
 
-mdebug on lpclink2: Initial Installation
-----------------------------------------
+Installing lpcboot and mdebug on the LPC Link 2 board (first time)
+------------------------------------------------------------------
 
 1. Remove jumper JP1 from lpclink2
 
@@ -11,26 +19,24 @@ mdebug on lpclink2: Initial Installation
 
 3. Download the "soft" bootloader via DFU
    (it is normal to get "dfu status: io error")
-
    $ ./bin/lpcboot dfu firmware/lpclink2-dfu.bin
 
 4. flash bootloader:
-
    $ ./bin/lpcboot flash:boot firmware/lpclink2-boot.bin
 
 5. flash mdebug firmware:
-
    $ ./bin/lpcboot flash firmware/lpclink2-mdebug.bin
 
 6. install jumper JP1 on lpclink2
 
-7. power cycle board (unplug/plug to usb)
+7. reboot the lpclink2:
+   $ ./bin/lpcboot reboot
 
 8. LED should blink for ~3 seconds (bootloader) then start mdebug
 
 
-mdebug on lpclink2: Upgrade mdebug firmware
--------------------------------------------
+Upgrading mdebug firmware on the LPC Link 2 board (after initial install)
+-------------------------------------------------------------------------
 
 1. disconnect lpclink2 from USB
 
@@ -41,26 +47,31 @@ mdebug on lpclink2: Upgrade mdebug firmware
 4. If you get "flash failure", run the step #2 command again
    (without disconnecting and reconnecting the board)
 
+5. reboot back into the debugger firmware
+   $ ./bin/lpcboot reboot
 
-firmware version info (debugger should show this on connect)
-------------------------------------------------------------
+
+Checking firmware version (debugger should show this on connect)
+----------------------------------------------------------------
 
 usb: board id: LPCLINK2
-usb: build id: fw v0.9 (Aug  5 2015, 18:58:09)
+usb: build id: fw v0.9 (Aug  7 2015, 17:39:58)
 usb: protocol: 1.0
 usb: max data: 8192 byte rx buffer
 
 
-connecting lpclink2 to debug target
------------------------------------
+Connecting LPC Link 2 to debug target
+-------------------------------------
 
-Either:
- - Install JP2 to set voltage to 3.3v and supply to VREF
- - Remove JP2 to sense voltage from VREF
+You can use the 10pin cable with the J7 connector to hook up to a target
+board that uses ARM's standard SWD debug pinout.  If you want to supply
+3.3v to the target and operate at that voltage, *install* the JP2 jumper.
+If you want to operate at the board voltage sensed by the VREF pin on the
+10pin connector, *remote* the JP2 connector.
 
-Either:
- - Use 10 pin ARM debug cable from J7
- - Use 0.1" header J6
+You can use jumper wires from the 0.1" J6 header (see pinout below), but
+in this case there is no VREF pin available, so you must *install* the
+JP2 jumper and operate at 3.3v.
 
 
 J6 Header (pin 1 is furthest from J6 silkscreen)

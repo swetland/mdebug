@@ -1,0 +1,3 @@
+# mdebug debugger firmware and lpcboot protocol
+SUBSYSTEM=="usb", ATTR{idVendor}=="1209", ATTR{idProduct}=="5038", MODE="0660", GROUP="plugdev"
+SUBSYSTEM=="usb", ATTR{idVendor}=="1209", ATTR{idProduct}=="5039", MODE="0660", GROUP="plugdev"
