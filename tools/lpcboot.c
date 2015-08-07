@@ -199,7 +199,10 @@ int main(int argc, char **argv) {
 		return dfu_download(buf + 256, sz);
 	}
 	for (;;) {
-		usb = usb_open(0x18d1, 0xdb00, 0);
+		usb = usb_open(0x1209, 0x5039, 0);
+		if (usb == 0) {
+			usb = usb_open(0x18d1, 0xdb00, 0);
+		}
 		if (usb == 0) {
 			if (once) {
 				fprintf(stderr,"waiting for device...\n");
