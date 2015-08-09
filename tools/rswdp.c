@@ -115,12 +115,20 @@ static void process_async(u32 *data, unsigned count) {
 			break;
 		case CMD_SWO_DATA:
 			n = RSWD_MSG_ARG(msg);
-			if (n > count)
+			if (swd_version < RSWD_VERSION_1_1) {
+				// arg is wordcount
+				tmp = n;
+				n *= 4;
+			} else {
+				// arg is bytecount
+				tmp = (n + 3) / 4;
+			}
+			if (tmp > count)
 				return;
-			process_swo_data(data, n * 4);
-			transmit_swo_data(data, n * 4);
-			data += n;
-			count -= n;
+			process_swo_data(data, n);
+			transmit_swo_data(data, n);
+			data += tmp;
+			count -= tmp;
 		default:
 			return;
 		}

@@ -80,7 +80,20 @@
 #define ERR_IO		3
 #define ERR_PARITY	4
 
-#define RSWD_VERSION	0x0100
+#define RSWD_VERSION		0x0101
+
+#define RSWD_VERSION_1_0	0x0100
+#define RSWD_VERSION_1_1	0x0101
+
+// Pre-1.0
+//  - max packet size fixed at 2048 bytes
+//
+// Version 1.0
+// - CMD_VERSION, CMD_BUILD_STR, CMD_BOARD_STR, CMD_RX_MAXDATA,
+//   CMD_CLOCK_KHZ added
+//
+// Version 1.1
+// - CMD_SWO_DATA arg is now byte count, not word count
 
 /* CMD_SWD_OP operations - combine for direct AP/DP io */
 #define OP_RD 0x00
