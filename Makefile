@@ -15,6 +15,7 @@ SRCS := tools/debugger.c \
 	tools/debugger-core.c \
 	tools/debugger-commands.c \
 	tools/gdb-bridge.c \
+	tools/arm-m-debug.c \
 	tools/linenoise.c \
 	tools/lkdebug.c \
 	tools/rswdp.c \

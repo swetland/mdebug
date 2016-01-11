@@ -595,3 +595,18 @@ int debugger_command(char *line) {
 	return r;
 }
 
+static int _fail(void) {
+	return -1;
+}
+
+debug_transport DUMMY_TRANSPORT = {
+	.attach = (void*) _fail,
+	.clear_error = (void*) _fail,
+	.mem_rd_32 = (void*) _fail,
+	.mem_wr_32 = (void*) _fail,
+	.mem_rd_32_c = (void*) _fail,
+	.mem_wr_32_c = (void*) _fail,
+};
+
+debug_transport *ACTIVE_TRANSPORT = &SWDP_TRANSPORT;
+

@@ -29,16 +29,9 @@
 #include "rswdp.h"
 #include "arm-v7m.h"
 
-#include <debugger.h>
+#include "debugger.h"
 
 int swd_verbose = 0;
-
-static volatile int ATTN;
-
-void swdp_interrupt(void) {
-	ATTN++;
-	if (write(2, "\b\b*INTERRUPT*\n", 16)) { /* do nothing */ }
-}
 
 static pthread_mutex_t swd_lock = PTHREAD_MUTEX_INITIALIZER;
 static pthread_cond_t swd_event = PTHREAD_COND_INITIALIZER;
@@ -70,7 +63,7 @@ static unsigned swd_version = 0x0001;
 
 static int swd_error = 0;
 
-int swdp_error(void) {
+static int _swdp_error(void) {
 	return swd_error;
 }
 
@@ -217,6 +210,20 @@ static int process_reply(struct txn *t, u32 *data, int count) {
 				//printf("data %08x -> %p\n", data[0], t->rx[rxp]);
 				*(t->rx[rxp++]) = *data++;
 				rxc--;
+			}
+			continue;
+		case CMD_JTAG_DATA:
+			//xprintf(XSWD, "JTAG DATA %d bits\n", n);
+			if (((n+31)/32) > rxc) {
+				xprintf(XSWD, "reply overrun (%d bits > %d words)\n", n, rxc);
+				return -1;
+			}
+			n = (n + 31) / 32;
+			while (n > 0) {
+				//xprintf(XSWD, "JTAG %08x\n", *data);
+				*(t->rx[rxp++]) = *data++;
+				rxc--;
+				n--;
 			}
 			continue;
 		case CMD_STATUS:
@@ -442,14 +449,14 @@ int swdp_ap_read(u32 addr, u32 *value) {
 	return q_exec(&t);
 }
 
-int swdp_ahb_read(u32 addr, u32 *value) {
+static int _swdp_ahb_read(u32 addr, u32 *value) {
 	struct txn t;
 	q_init(&t);
 	q_ahb_read(&t, addr, value);
 	return q_exec(&t);
 }
 
-int swdp_ahb_write(u32 addr, u32 value) {
+static int _swdp_ahb_write(u32 addr, u32 value) {
 	struct txn t;
 	q_init(&t);
 	q_ahb_write(&t, addr, value);
@@ -494,7 +501,7 @@ int swdp_ahb_write32(u32 addr, u32 *in, int count) {
 /* 10 txns overhead per 128 read txns - 126KB/s on 72MHz STM32F
  * 8 txns overhead per 128 write txns - 99KB/s on 72MHz STM32F
  */
-int swdp_ahb_read32(u32 addr, u32 *out, int count) {
+static int _swdp_ahb_read32(u32 addr, u32 *out, int count) {
 	struct txn t;
 
 	while (count > 0) {
@@ -543,7 +550,7 @@ int swdp_ahb_read32(u32 addr, u32 *out, int count) {
 	return 0;
 }
 
-int swdp_ahb_write32(u32 addr, u32 *in, int count) {
+static int _swdp_ahb_write32(u32 addr, u32 *in, int count) {
 	struct txn t;
 
 	while (count > 0) {
@@ -587,6 +594,7 @@ int swdp_ahb_write32(u32 addr, u32 *in, int count) {
 }
 #endif
 
+#if 0
 int swdp_core_write(u32 n, u32 v) {
 	struct txn t;
 	q_init(&t);
@@ -738,6 +746,7 @@ int swdp_watchpoint_rw(unsigned n, u32 addr) {
 int swdp_watchpoint_disable(unsigned n) {
 	return swdp_watchpoint(n, 0, DWT_FN_DISABLED);
 }
+#endif
 
 int swdp_bootloader(void) {
 	struct txn t;
@@ -746,7 +755,7 @@ int swdp_bootloader(void) {
 	return q_exec(&t);
 }
 
-int swdp_reset(void) {
+static int _swdp_reset(void) {
 	struct txn t;
 	u32 n, idcode;
 
@@ -784,7 +793,7 @@ int swdp_reset(void) {
 	return 0;
 }
 
-int swdp_clear_error(void) {
+static int _swdp_clear_error(void) {
 	if (swd_error == 0) {
 		return 0;
 	} else {
@@ -840,3 +849,30 @@ int swdp_open(void) {
 	pthread_create(&swd_thread, NULL, swd_reader, NULL);
 	return 0;
 }
+
+int jtag_io(unsigned count, u32 *tms, u32 *tdi, u32 *tdo) {
+	struct txn t;
+	q_init(&t);
+	if (count > 32768)
+		return -1;
+	t.tx[t.txc++] = RSWD_MSG(CMD_JTAG_IO, 0, count);
+	count = (count + 31) / 32;
+	while (count > 0) {
+		t.tx[t.txc++] = *tms++;
+		t.tx[t.txc++] = *tdi++;
+		t.rx[t.rxc++] = tdo++;
+		count--;
+	}
+	return q_exec(&t);
+}
+
+debug_transport SWDP_TRANSPORT = {
+	.attach = _swdp_reset,
+	.error = _swdp_error,
+	.clear_error = _swdp_clear_error,
+	.mem_rd_32 = _swdp_ahb_read,
+	.mem_wr_32 = _swdp_ahb_write,
+	.mem_rd_32_c = _swdp_ahb_read32,
+	.mem_wr_32_c = _swdp_ahb_write32,
+};
+

@@ -18,12 +18,21 @@
 #ifndef _RSWDP_H__
 #define _RSWDP_H__
 
-int swdp_ahb_read(u32 addr, u32 *value);
-int swdp_ahb_write(u32 addr, u32 value);
+int swdp_open(void);
 
-/* bulk reads/writes (more efficient after ~3-4 words */
-int swdp_ahb_read32(u32 addr, u32 *out, int count);
-int swdp_ahb_write32(u32 addr, u32 *out, int count);
+void swdp_enable_tracing(int yes);
+
+void swdp_target_reset(int enable);
+
+int swdp_bootloader(void);
+int swdp_set_clock(unsigned khz);
+int swo_set_clock(unsigned khz);
+
+int jtag_io(unsigned count, u32 *tms, u32 *tdi, u32 *tdo);
+
+void swdp_interrupt(void);
+
+/* these are now above the transport layer and should be renamed... */
 
 /* return 0 when *addr != oldval, -1 on error, -2 on interrupt */
 int swdp_ahb_wait_for_change(u32 addr, u32 oldval);
@@ -34,7 +43,6 @@ int swdp_core_resume(void);
 
 /* return 0 when CPU halts, -1 if an error occurs, or -2 if interrupted */
 int swdp_core_wait_for_halt(void);
-void swdp_interrupt(void);
 
 /* access to CPU registers */
 int swdp_core_read(u32 n, u32 *v);
@@ -47,22 +55,22 @@ int swdp_watchpoint_wr(unsigned n, u32 addr);
 int swdp_watchpoint_rw(unsigned n, u32 addr);
 int swdp_watchpoint_disable(unsigned n);
 
-/* attempt to clear any error state from previous transactions */
-/* return 0 if successful (or no error state existed) */
-int swdp_clear_error(void);
-int swdp_error(void);
-
-int swdp_reset(void);
-
-int swdp_open(void);
-
-void swdp_enable_tracing(int yes);
-
-void swdp_target_reset(int enable);
-
-int swdp_bootloader(void);
-int swdp_set_clock(unsigned khz);
-int swo_set_clock(unsigned khz);
+/* these are now provided by the transport layer */
+//int swdp_reset(void);
+//int swdp_error(void);
+//int swdp_clear_error(void);
+//int swdp_ahb_read(u32 addr, u32 *value);
+//int swdp_ahb_write(u32 addr, u32 value);
+// bulk reads/writes (more efficient after ~3-4 words
+// int swdp_ahb_read32(u32 addr, u32 *out, int count);
+// int swdp_ahb_write32(u32 addr, u32 *out, int count);
+#define swdp_reset debug_attach
+#define swdp_error debug_error
+#define swdp_clear_error debug_clear_error
+#define swdp_ahb_read mem_rd_32
+#define swdp_ahb_write mem_wr_32
+#define swdp_ahb_read32 mem_rd_32_c
+#define swdp_ahb_write32 mem_wr_32_c
 
 #endif
 
