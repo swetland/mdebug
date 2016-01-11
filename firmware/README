@@ -55,8 +55,8 @@ Checking firmware version (debugger should show this on connect)
 ----------------------------------------------------------------
 
 usb: board id: LPCLINK2
-usb: build id: fw v0.9 (Aug  7 2015, 17:39:58)
-usb: protocol: 1.0
+usb: build id: fw v0.91 (Jan 11 2016, 15:43:28)
+usb: protocol: 1.2
 usb: max data: 8192 byte rx buffer
 
 
