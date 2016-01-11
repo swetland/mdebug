@@ -15,6 +15,8 @@ SRCS := tools/debugger.c \
 	tools/debugger-core.c \
 	tools/debugger-commands.c \
 	tools/gdb-bridge.c \
+	tools/jtag.c \
+	tools/jtag-dap.c \
 	tools/arm-m-debug.c \
 	tools/linenoise.c \
 	tools/lkdebug.c \
