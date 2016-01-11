@@ -1,7 +1,7 @@
 /* rswdp.h - remote serial wire debug protocol
  *
  * Copyright 2011 Brian Swetland <swetland@frotz.net>
- * 
+ *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -57,11 +57,14 @@
 #define CMD_BOOTLOADER	0x09 /* return to bootloader for reflashing */
 #define CMD_SET_CLOCK	0x0A /* set SWCLK rate to n khz */
 #define CMD_SWO_CLOCK	0x0B /* set SWOCLK rate to n khz, 0 = disable SWO */
+#define CMD_JTAG_IO	0x0C /* op=0, arg=bitcount, data x (count/32) * 2 */
+			     /* tms, tdi word pairs per 32bits */
 
 /* valid: target to host */
 #define CMD_STATUS	0x10 /* op=errorcode, arg=commands since last TXN_START */
 #define CMD_SWD_DATA	0x11 /* op=0 arg=count, payload: data x count */
-#define CMD_SWO_DATA	0x12 /* op=0 arg=count, payload: count * 4 bytes */
+#define CMD_SWO_DATA	0x12 /* op=0 arg=count, payload: ((count+3)/4) words */
+#define CMD_JTAG_DATA	0x14 /* op=0 arg=bitcount, payload: (bitcount/32) words */
 
 /* valid: target to host async */
 #define CMD_DEBUG_PRINT	0x20 /* arg*4 bytes of ascii debug output */
