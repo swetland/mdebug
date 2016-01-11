@@ -83,6 +83,15 @@ int do_exit(int argc, param *argv) {
 }
 
 int do_attach(int argc, param *argv) {
+	if (argc > 0) {
+		if (!strcmp(argv[0].s, "swd")) {
+			ACTIVE_TRANSPORT = &SWDP_TRANSPORT;
+		} else if (!strcmp(argv[0].s, "jtag")) {
+			ACTIVE_TRANSPORT = &JTAG_TRANSPORT;
+		} else {
+			xprintf(XCORE, "unknown transport '%s'\n", argv[0].s);
+		}
+	}
 	return swdp_reset();
 }
 
