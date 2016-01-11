@@ -3,6 +3,8 @@
 #ifndef _FW_TYPES_H_
 #define _FW_TYPES_H_
 
+typedef unsigned long int u64;
+typedef signed long int i64;
 typedef unsigned int u32;
 typedef signed int i32;
 typedef unsigned short u16;
