@@ -43,6 +43,7 @@ $(call agent, lpclink2,  0x10080400)
 $(call agent, stm32f4xx, 0x20000400)
 $(call agent, lpc13xx,   0x10000400)
 $(call agent, lpc15xx,   0x02000400)
+$(call agent, cc13xx,    0x20000400)
 
 # tool to pack the agents into a source file
 SRCS := tools/mkbuiltins.c
