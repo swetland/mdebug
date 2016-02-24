@@ -435,6 +435,7 @@ int do_help(int argc, param *argv) {
 }
 
 void *get_builtin_file(const char *fn, size_t *sz);
+const char *get_builtin_filename(unsigned n);
 
 void *load_file(const char *fn, size_t *_sz) {
 	int fd;
@@ -592,16 +593,66 @@ void *load_agent(const char *arch, size_t *_sz) {
 	return load_file(name, _sz);
 }
 
-static char *agent_arch = NULL;
+static flash_agent *AGENT = NULL;
+static size_t AGENT_sz = 0;
+static char *AGENT_arch = NULL;
 
 int do_setarch(int argc, param *argv) {
+	unsigned n;
 	char *x;
-	if (argc != 1) return -1;
-	if((x = strdup(argv[0].s))) {
-		free(agent_arch);
-		agent_arch = x;
+	const char *name;
+	if (argc != 1) {
+		if (AGENT_arch) {
+			xprintf(XCORE, "current flash agent is '%s'\n", AGENT_arch);
+		} else {
+			xprintf(XCORE, "no flash agent selected\n");
+		}
+fail_load:
+		xprintf(XCORE, "error: set architecture with: arch <name> (omit the .bin)\n");
+		for (n = 0; (name = get_builtin_filename(n)) != NULL; n++) {
+			if (strncmp(name, "agent-", 6)) {
+				continue;
+			}
+			xprintf(XCORE, "   %s\n", name + 6);
+		}
+		goto fail;
 	}
+	if ((x = strdup(argv[0].s)) == NULL) {
+		goto fail;
+	}
+	free(AGENT_arch);
+	free(AGENT);
+	AGENT_arch = x;
+
+	if ((AGENT = load_agent(AGENT_arch, &AGENT_sz)) == NULL) {
+		xprintf(XCORE, "error: cannot load flash agent for architecture '%s'\n", AGENT_arch);
+		goto fail_load;
+	}
+
+	// sanity check
+	if ((AGENT_sz < sizeof(flash_agent)) ||
+		(AGENT->magic != AGENT_MAGIC) ||
+		(AGENT->version != AGENT_VERSION)) {
+		xprintf(XCORE, "error: invalid agent image\n");
+		free(AGENT);
+		AGENT = NULL;
+		goto fail;
+	}
+
+	xprintf(XCORE, "flash agent '%s' loaded.\n", AGENT_arch);
 	return 0;
+
+fail:
+	if (AGENT) {
+		free(AGENT);
+		AGENT = NULL;
+	}
+	if (AGENT_arch) {
+		free(AGENT_arch);
+		AGENT_arch = NULL;
+	}
+	AGENT_sz = 0;
+	return -1;
 }
 
 int invoke(u32 agent, u32 func, u32 r0, u32 r1, u32 r2, u32 r3) {
@@ -643,22 +694,24 @@ int invoke(u32 agent, u32 func, u32 r0, u32 r1, u32 r2, u32 r3) {
 }
 
 int run_flash_agent(u32 flashaddr, void *data, size_t data_sz) {
-	flash_agent *agent = NULL;
+	u8 buffer[4096];
+	flash_agent *agent;
 	size_t agent_sz;
 
-	if ((agent = load_agent(agent_arch, &agent_sz)) == NULL) {
-		xprintf(XCORE, "error: cannot load flash agent for architecture '%s'\n",
-			agent_arch ? agent_arch : "unknown");
+	if (AGENT == NULL) {
+		xprintf(XCORE, "error: no flash agent selected\n");
 		xprintf(XCORE, "error: set architecture with: arch <name>\n");
 		goto fail;
 	}
-	// sanity check
-	if ((agent_sz < sizeof(flash_agent)) ||
-		(agent->magic != AGENT_MAGIC) ||
-		(agent->version != AGENT_VERSION)) {
-		xprintf(XCORE, "error: invalid agent image\n");
+	if (AGENT_sz > sizeof(buffer)) {
+		xprintf(XCORE, "error: flash agent too large\n");
 		goto fail;
 	}
+
+	memcpy(buffer, AGENT, AGENT_sz);
+	agent_sz = AGENT_sz;
+	agent = (void*) buffer;
+
 	// replace magic with bkpt instructions
 	agent->magic = 0xbe00be00;
 
@@ -744,11 +797,9 @@ int run_flash_agent(u32 flashaddr, void *data, size_t data_sz) {
 		}
 	}
 
-	free(agent);
 	if (data) free(data);
 	return 0;
 fail:
-	if (agent) free(agent);
 	if (data) free(data);
 	return -1;
 }

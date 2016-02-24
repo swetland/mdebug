@@ -126,6 +126,13 @@ int main(int argc, char **argv) {
 "	}\n"
 "	return NULL;\n"
 "}\n"
+"\n"
+"const char *get_builtin_filename(unsigned n) {\n"
+"	if (n >= (sizeof(files)/sizeof(files[0]))) {\n"
+"		return NULL;\n"
+"	}\n"
+"	return files[n].name;\n"
+"}\n"
 	);
 
 	return 0;

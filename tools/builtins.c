@@ -135,3 +135,10 @@ void *get_builtin_file(const char *name, size_t *sz) {
 	}
 	return NULL;
 }
+
+const char *get_builtin_filename(unsigned n) {
+	if (n >= (sizeof(files)/sizeof(files[0]))) {
+		return NULL;
+	}
+	return files[n].name;
+}
