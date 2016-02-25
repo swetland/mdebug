@@ -100,6 +100,7 @@ int flash_agent_ioctl(u32 op, void *ptr, u32 arg0, u32 arg1);
 // flash_addr, and flash_size are read back after this method
 // returns success (to allow it to dynamically size flash based
 // on part ID, etc).
+// - ERR_INVALID indicates an unsupported part
 
 // fa.data_size must be a multiple of the minimum block size that
 // fa.write requires, so that if the host has to issue a series
@@ -108,9 +109,9 @@ int flash_agent_ioctl(u32 op, void *ptr, u32 arg0, u32 arg1);
 //
 // fa.write() may round writes up the the minimum write block size
 // as necessary, and should fill with 0s in that case.*
-// 
+//
 // fa.write() behaviour is undefined if the underlying flash has not
-// been erased first.  It may fail (ERR_FAIL) or it may appear to 
+// been erased first.  It may fail (ERR_FAIL) or it may appear to
 // succeed, but flash contents may be incorrect.
 //
 // fa.write() may fail (ERR_ALIGN) if the start address is not aligned
@@ -128,12 +129,12 @@ int flash_agent_ioctl(u32 op, void *ptr, u32 arg0, u32 arg1);
 //
 // Bogus parameters may cause failure (ERR_INVALID)
 //
-// * In general, conveying the full complexity of embedded flash 
+// * In general, conveying the full complexity of embedded flash
 // configuration (which could include various banks of various sizes,
 // with differing write and erase block size requirements) is not
 // attempted.  The goal is to provide an agent that can reasonably
 // handle reasonable flash requests (eg the user knows what a sane
-// starting alignment, etc is, does not split logical "partitions" 
+// starting alignment, etc is, does not split logical "partitions"
 // across physical erase block boundaries, etc)
 
 #endif

@@ -697,6 +697,7 @@ int run_flash_agent(u32 flashaddr, void *data, size_t data_sz) {
 	u8 buffer[4096];
 	flash_agent *agent;
 	size_t agent_sz;
+	int r;
 
 	if (AGENT == NULL) {
 		xprintf(XCORE, "error: no flash agent selected\n");
@@ -737,7 +738,11 @@ int run_flash_agent(u32 flashaddr, void *data, size_t data_sz) {
 		xprintf(XCORE, "error: failed to download agent\n");
 		goto fail;
 	}
-	if (invoke(agent->load_addr, agent->setup, 0, 0, 0, 0)) {
+	r = invoke(agent->load_addr, agent->setup, agent->load_addr, 0, 0, 0);
+	if (r != 0) {
+		if (r == ERR_INVALID) {
+			xprintf(XCORE, "agent: unsupported part\n");
+		}
 		goto fail;
 	}
 	if (swdp_ahb_read32(agent->load_addr + 16, (void*) &agent->data_addr, 4)) {
@@ -757,7 +762,8 @@ int run_flash_agent(u32 flashaddr, void *data, size_t data_sz) {
 	if ((flashaddr < agent->flash_addr) ||
 		(data_sz > agent->flash_size) ||
 		((flashaddr + data_sz) > (agent->flash_addr + agent->flash_size))) {
-		xprintf(XCORE, "invalid flash address %08x\n", flashaddr);
+		xprintf(XCORE, "invalid flash address %08x..%08x\n",
+			flashaddr, flashaddr + data_sz);
 		goto fail;
 	}
 
