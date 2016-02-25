@@ -9,10 +9,13 @@ TARGET_CC := $(TOOLCHAIN)gcc
 TARGET_OBJCOPY := $(TOOLCHAIN)objcopy
 TARGET_OBJDUMP := $(TOOLCHAIN)objdump
 
+ARCH_M3_CFLAGS := -mcpu=cortex-m3 -mthumb
+ARCH_M0_CFLAGS := -mcpu=cortex-m0 -mthumb
+
 TARGET_CFLAGS := -g -Os -Wall
 TARGET_CFLAGS += -Wno-unused-but-set-variable
 TARGET_CFLAGS += -I. -Iinclude
-TARGET_CFLAGS += -mcpu=cortex-m3 -mthumb -mthumb-interwork
+#TARGET_CFLAGS += -mcpu=cortex-m3 -mthumb -mthumb-interwork
 TARGET_CFLAGS += -ffunction-sections -fdata-sections
 TARGET_CFLAGS += -fno-builtin -nostdlib
 
@@ -54,7 +57,7 @@ out/agent-%.lst: out/agent-%.elf
 out/agent-%.elf: agents/%.c
 	@mkdir -p $(dir $@)
 	@echo compile $@
-	$(QUIET)$(TARGET_CC) $(TARGET_CFLAGS) -Wl,--script=build/agent.ld -Wl,-Ttext=$(LOADADDR) -o $@ $<
+	$(QUIET)$(TARGET_CC) $(TARGET_CFLAGS) $(ARCH_$(ARCH)_CFLAGS) -Wl,--script=build/agent.ld -Wl,-Ttext=$(LOADADDR) -o $@ $<
 
 out/%.o: %.c
 	@mkdir -p $(dir $@)
@@ -75,5 +78,6 @@ program = $(eval $(call _program,$1,$(patsubst %.c,out/%.o,$2),$(patsubst %.c,ou
 agent = $(eval AGENTS += $(strip $1))\
 $(eval ALL += $(patsubst %,out/agent-%.bin,$(strip $1)))\
 $(eval ALL += $(patsubst %,out/agent-%.lst,$(strip $1)))\
-$(eval out/agent-$(strip $1).elf: LOADADDR := $(strip $2))
+$(eval out/agent-$(strip $1).elf: LOADADDR := $(strip $2))\
+$(eval out/agent-$(strip $1).elf: ARCH := $(strip $3))
 
