@@ -45,6 +45,7 @@ $(call agent, stm32f0xx, 0x20000400, M0)
 $(call agent, lpc13xx,   0x10000400, M3)
 $(call agent, lpc15xx,   0x02000400, M3)
 $(call agent, cc13xx,    0x20000400, M3)
+$(call agent, nrf528xx,  0x20000400, M3)
 
 # tool to pack the agents into a source file
 SRCS := tools/mkbuiltins.c
