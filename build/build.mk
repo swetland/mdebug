@@ -10,7 +10,10 @@ TARGET_OBJCOPY := $(TOOLCHAIN)objcopy
 TARGET_OBJDUMP := $(TOOLCHAIN)objdump
 
 ARCH_M3_CFLAGS := -mcpu=cortex-m3 -mthumb
+ARCH_M3_LIBS := $(shell $(TARGET_CC) $(ARCH_M3_CFLAGS) -print-libgcc-file-name)
+
 ARCH_M0_CFLAGS := -mcpu=cortex-m0 -mthumb
+ARCH_M0_LIBS := $(shell $(TARGET_CC) $(ARCH_M0_CFLAGS) -print-libgcc-file-name)
 
 TARGET_CFLAGS := -g -Os -Wall
 TARGET_CFLAGS += -Wno-unused-but-set-variable
@@ -57,7 +60,7 @@ out/agent-%.lst: out/agent-%.elf
 out/agent-%.elf: agents/%.c
 	@mkdir -p $(dir $@)
 	@echo compile $@
-	$(QUIET)$(TARGET_CC) $(TARGET_CFLAGS) $(ARCH_$(ARCH)_CFLAGS) -Wl,--script=build/agent.ld -Wl,-Ttext=$(LOADADDR) -o $@ $<
+	$(QUIET)$(TARGET_CC) $(TARGET_CFLAGS) $(ARCH_$(ARCH)_CFLAGS) -Wl,--script=build/agent.ld -Wl,-Ttext=$(LOADADDR) -o $@ $< $(ARCH_$(ARCH)_LIBS)
 
 out/%.o: %.c
 	@mkdir -p $(dir $@)
