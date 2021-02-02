@@ -131,5 +131,7 @@ extern debug_transport DUMMY_TRANSPORT;
 extern debug_transport SWDP_TRANSPORT;
 extern debug_transport JTAG_TRANSPORT;
 
+int debug_target(const char* name);
+
 #endif
 

@@ -171,6 +171,9 @@ done:
 	xprintf(XSWD, "usb: protocol: %d.%d\n", version >> 8, version & 0xff);
 	xprintf(XSWD, "usb: max data: %d byte rx buffer\n", maxdata);
 
+	if (version < 0x0103) {
+		xprintf(XSWD, "usb: WARNING, FIRMWARE OUT OF DATE\n");
+	}
 	swd_version = version;
 	swd_maxwords = maxdata / 4;
 }
@@ -237,7 +240,7 @@ static int process_reply(struct txn *t, u32 *data, int count) {
 				return 0;
 			}
 		case CMD_CLOCK_KHZ:
-			xprintf(XSWD,"mdebug: SWD clock: %d KHz\n", n);
+			xprintf(XSWD,"mdebug: %s clock: %d KHz\n", op ? "SWO" : "SWD", n);
 			continue;
 		default:
 			xprintf(XSWD,"unknown command 0x%02x\n", RSWD_MSG_CMD(msg));
@@ -246,6 +249,61 @@ static int process_reply(struct txn *t, u32 *data, int count) {
 	}
 	return 0;
 }
+
+#define TRACE_RSWD_XMIT 0
+#if TRACE_RSWD_XMIT
+static const char* opstr(unsigned op) {
+	switch (op) {
+	case OP_RD|OP_DP|OP_X0: return "RD DP x0 (DPIDR)";
+	case OP_RD|OP_DP|OP_X4: return "RD DP x4 (DPCTRL)";
+	case OP_RD|OP_DP|OP_X8: return "RD DP x8 (RESEND)";
+	case OP_RD|OP_DP|OP_XC: return "RD DP xC";
+	case OP_WR|OP_DP|OP_X0: return "WR DP x0 (ABORT)";
+	case OP_WR|OP_DP|OP_X4: return "WR DP x4 (DPCTRL)";
+	case OP_WR|OP_DP|OP_X8: return "WR DP x8 (SELECT)";
+	case OP_WR|OP_DP|OP_XC: return "WR DP xC (TARGETSEL)";
+	case OP_RD|OP_AP|OP_X0: return "RD AP x0";
+	case OP_RD|OP_AP|OP_X4: return "RD AP x4";
+	case OP_RD|OP_AP|OP_X8: return "RD AP x8";
+	case OP_RD|OP_AP|OP_XC: return "RD AP xC";
+	case OP_WR|OP_AP|OP_X0: return "WR AP x0";
+	case OP_WR|OP_AP|OP_X4: return "WR AP x4";
+	case OP_WR|OP_AP|OP_X8: return "WR AP x8";
+	case OP_WR|OP_AP|OP_XC: return "WR AP xC";
+	default: return "???";
+	}
+}
+
+static void q_dump(u32* tx, unsigned count) {
+	while (count-- > 0) {
+		unsigned cmd = RSWD_MSG_CMD(*tx);
+		unsigned op = RSWD_MSG_OP(*tx);
+		unsigned arg = RSWD_MSG_ARG(*tx);
+		switch (cmd) {
+		case CMD_SWD_WRITE:
+			xprintf(XSWD, "CMD_SWD_WRITE %s 0x%08x n=%u\n", opstr(op), tx[1], arg);
+			while (arg > 0) { arg--; tx++; count--; }
+			break;
+		case CMD_SWD_READ:
+			xprintf(XSWD, "CMD_SWD_READ %s n=%u\n", opstr(op), arg);
+			break;
+		case CMD_SWD_DISCARD:
+			xprintf(XSWD, "CMD_SWD_DISCARD %s n=%u\n", opstr(op), arg);
+			break;
+		case CMD_ATTACH:
+			xprintf(XSWD, "CMD_ATTACH\n");
+			break;
+		case CMD_RESET:
+			xprintf(XSWD, "CMD_RESET n=%u\n", arg);
+			break;
+		default:
+			xprintf(XSWD, "CMD_%02x\n", cmd);
+		}
+		tx++;
+	}
+	xprintf(XSWD, "---\n");
+}
+#endif
 
 static int q_exec(struct txn *t) {
 	unsigned data[MAXWORDS];
@@ -264,6 +322,10 @@ static int q_exec(struct txn *t) {
 	 */
 	if (((t->txc % 16) == 0) && (t->txc != swd_maxwords))
 		t->tx[t->txc++] = RSWD_MSG(CMD_NULL, 0, 0);
+
+#if TRACE_RSWD_XMIT
+	q_dump(t->tx + 1, t->txc - 1);
+#endif
 
 	pthread_mutex_lock(&swd_lock);
  	seq = sequence++;
@@ -755,41 +817,71 @@ int swdp_bootloader(void) {
 	return q_exec(&t);
 }
 
+static uint32_t targetsel_val = 0;
+static unsigned targetsel_on = 0;
+
+void swdp_targetsel(uint32_t val, unsigned on) {
+	targetsel_val = val;
+	targetsel_on = on;
+}
+
 static int _swdp_reset(void) {
 	struct txn t;
 	u32 n, idcode;
 
 	swd_error = 0;
 	q_init(&t);
-	t.tx[t.txc++] = RSWD_MSG(CMD_ATTACH, 0, 0);
+	t.tx[t.txc++] = RSWD_MSG(CMD_ATTACH, ATTACH_JTAG_TO_SWD, 0);
+	t.tx[t.txc++] = RSWD_MSG(CMD_ATTACH, ATTACH_DORMANT_TO_SWD, 0);
+	t.tx[t.txc++] = RSWD_MSG(CMD_ATTACH, ATTACH_SWD_RESET, 0);
+
+	if (targetsel_on) {
+		t.tx[t.txc++] = SWD_WR(DP_BUFFER, 1);
+		t.tx[t.txc++] = targetsel_val;
+	}
+	
 	t.tx[t.txc++] = SWD_RD(DP_IDCODE, 1);
 	t.rx[t.rxc++] = &idcode;
 	if (q_exec(&t)) {
 		xprintf(XSWD, "attach: IDCODE: ????????\n");
 	} else {
-		xprintf(XSWD, "attach: IDCODE: %08x\n", idcode);
+		xprintf(XSWD, "attach: IDCODE: %08x\n");
 	}
 
 	swd_error = 0;
 	q_init(&t);
+
  	/* clear any stale errors */
 	t.tx[t.txc++] = SWD_WR(DP_ABORT, 1);
 	t.tx[t.txc++] = 0x1E;
 
-	/* power up */
-	t.tx[t.txc++] = SWD_WR(DP_DPCTRL, 1);
-	t.tx[t.txc++] = (1 << 28) | (1 << 30);
-	t.tx[t.txc++] = SWD_RD(DP_DPCTRL, 1);
-	t.rx[t.rxc++] = &n;
+	if (targetsel_on && (targetsel_val == 0xf1002927)) {
+		// for pico recovery dap, only valid action is clear
+		// debug power bits to put the chip in to recovery mode
+		t.tx[t.txc++] = SWD_WR(DP_DPCTRL, 1);
+		t.tx[t.txc++] = 0;
+		t.tx[t.txc++] = SWD_RD(DP_DPCTRL, 1);
+		t.rx[t.rxc++] = &n;
+	} else{
+		/* power up */
+		t.tx[t.txc++] = SWD_WR(DP_DPCTRL, 1);
+		t.tx[t.txc++] = (1 << 28) | (1 << 30);
+		t.tx[t.txc++] = SWD_RD(DP_DPCTRL, 1);
+		t.rx[t.rxc++] = &n;
 
-	/* configure for 32bit IO */
-	q_ap_write(&t, AHB_CSW,
-		AHB_CSW_MDEBUG | AHB_CSW_PRIV |
-		AHB_CSW_PRIV | AHB_CSW_DBG_EN | AHB_CSW_32BIT);
+		/* configure for 32bit IO */
+		q_ap_write(&t, AHB_CSW,
+			AHB_CSW_MDEBUG | AHB_CSW_PRIV |
+			AHB_CSW_PRIV | AHB_CSW_DBG_EN | AHB_CSW_32BIT);
+	}
+
+	//u32 base;
+	//q_ap_read(&t, 0xF8, &base);
 	if (q_exec(&t))
 		return -1;
 
 	xprintf(XSWD, "attach: DPCTRL: %08x\n", n);
+	//xprintf(XSWD, "attach: BASE: %08x\n", base);
 	return 0;
 }
 

@@ -72,6 +72,7 @@ int main(int argc, char **argv) {
 		static struct option long_options[] = {
 			{"help", 0, 0, 'h'},
 			{"script", 1, 0, 'f'},
+			{"pico", 0, 0, 'p'},
 			{0, 0, 0, 0},
 		};
 
@@ -85,6 +86,9 @@ int main(int argc, char **argv) {
 				break;
 			case 'h':
 				usage(argc, argv);
+				break;
+			case 'p':
+				debug_target("pico");
 				break;
 			default:
 				usage(argc, argv);

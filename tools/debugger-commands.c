@@ -84,7 +84,20 @@ int do_exit(int argc, param *argv) {
 
 int do_attach(int argc, param *argv) {
 	if (argc > 0) {
-		if (!strcmp(argv[0].s, "swd")) {
+		if (!strcmp(argv[0].s, "pico0")) {
+			swdp_targetsel(0x01002927, 1);
+			ACTIVE_TRANSPORT = &SWDP_TRANSPORT;
+		} else if (!strcmp(argv[0].s, "pico1")) {
+			swdp_targetsel(0x11002927, 1);
+			ACTIVE_TRANSPORT = &SWDP_TRANSPORT;
+		} else if (!strcmp(argv[0].s, "picor")) {
+			swdp_targetsel(0xF1002927, 1);
+			ACTIVE_TRANSPORT = &SWDP_TRANSPORT;
+		} else if (!strcmp(argv[0].s, "swd")) {
+			swdp_targetsel(0, 0);
+			ACTIVE_TRANSPORT = &SWDP_TRANSPORT;
+		} else if (!strcmp(argv[0].s, "swdx")) {
+			swdp_targetsel(0xffffffff, 1);
 			ACTIVE_TRANSPORT = &SWDP_TRANSPORT;
 		} else if (!strcmp(argv[0].s, "jtag")) {
 			ACTIVE_TRANSPORT = &JTAG_TRANSPORT;
@@ -93,6 +106,19 @@ int do_attach(int argc, param *argv) {
 		}
 	}
 	return swdp_reset();
+}
+
+int debug_target(const char* name) {
+	if (!strcmp(name,"pico")) {
+		xprintf(XDATA, "target: RPxxxx MCUs\n");
+		xprintf(XDATA, "target: use 'attach pico0', 'attach pico1' to change cores\n");
+		xprintf(XDATA, "target: use 'attach picor' to enter rescue (reset-stop-in-rom)\n");
+		swdp_targetsel(0x01002927, 1);
+		return 0;
+	} else {
+		xprintf(XDATA, "target: unknown target '%s'\n", name);
+		return -1;
+	}
 }
 
 static u32 lastregs[19];

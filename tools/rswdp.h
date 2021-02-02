@@ -55,6 +55,8 @@ int swdp_watchpoint_wr(unsigned n, u32 addr);
 int swdp_watchpoint_rw(unsigned n, u32 addr);
 int swdp_watchpoint_disable(unsigned n);
 
+void swdp_targetsel(u32 val, unsigned on);
+
 /* these are now provided by the transport layer */
 //int swdp_reset(void);
 //int swdp_error(void);

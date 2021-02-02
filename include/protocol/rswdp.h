@@ -60,6 +60,12 @@
 #define CMD_JTAG_IO	0x0C /* op=0, arg=bitcount, data x (count/32) * 2 */
 			     /* tms, tdi word pairs per 32bits */
 
+/* ATTACH ops */
+#define ATTACH_SWD_RESET 0
+#define ATTACH_JTAG_TO_SWD 1
+#define ATTACH_DORMANT_TO_SWD 2
+#define ATTACH_SWD_TO_DORMANT 3
+
 /* valid: target to host */
 #define CMD_STATUS	0x10 /* op=errorcode, arg=commands since last TXN_START */
 #define CMD_SWD_DATA	0x11 /* op=0 arg=count, payload: data x count */
