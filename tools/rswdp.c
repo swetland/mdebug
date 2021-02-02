@@ -527,7 +527,7 @@ static int _swdp_ahb_write(u32 addr, u32 value) {
 
 #if 0
 /* simpler but far less optimal. keeping against needing to debug */
-int swdp_ahb_read32(u32 addr, u32 *out, int count) {
+int _swdp_ahb_read32(u32 addr, u32 *out, int count) {
 	struct txn t;
 	while (count > 0) {
 		int xfer = (count > 128) ? 128: count;
@@ -543,7 +543,7 @@ int swdp_ahb_read32(u32 addr, u32 *out, int count) {
 	return 0;
 }
 
-int swdp_ahb_write32(u32 addr, u32 *in, int count) {
+int _swdp_ahb_write32(u32 addr, u32 *in, int count) {
 	struct txn t;
 	while (count > 0) {
 		int xfer = (count > 128) ? 128: count;
@@ -559,6 +559,13 @@ int swdp_ahb_write32(u32 addr, u32 *in, int count) {
 	return 0;
 }
 #else
+
+// some implementations support >10 bits, but 10 is the minimum required
+// by spec (and some targets like rp2040 are limited to this)
+// TODO: detect this support 0x1000 or higher on targets that can handle it
+#define WRAPSIZE 0x400
+#define WRAPMASK (WRAPSIZE - 1)
+
 #define MAXDATAWORDS (swd_maxwords - 16)
 /* 10 txns overhead per 128 read txns - 126KB/s on 72MHz STM32F
  * 8 txns overhead per 128 write txns - 99KB/s on 72MHz STM32F
@@ -569,10 +576,8 @@ static int _swdp_ahb_read32(u32 addr, u32 *out, int count) {
 	while (count > 0) {
 		int xfer;
 
-		/* auto-inc wraps at 4K page boundaries -- limit max
-		 * transfer so we won't cross a page boundary
-		 */
-		xfer = (0x1000 - (addr & 0xFFF)) / 4;
+		// limit transfer so we won't cross a wrap boundary
+		xfer = (WRAPSIZE - (addr & WRAPMASK)) / 4;
 		if (xfer > count)
 			xfer = count;
 		if (xfer > MAXDATAWORDS)
@@ -618,10 +623,8 @@ static int _swdp_ahb_write32(u32 addr, u32 *in, int count) {
 	while (count > 0) {
 		int xfer;
 
-		/* auto-inc wraps at 4K page boundaries -- limit max
-		 * transfer so we won't cross a page boundary
-		 */
-		xfer = (0x1000 - (addr & 0xFFF)) / 4;
+		// limit transfer so we won't cross a wrap boundary
+		xfer = (WRAPSIZE - (addr & WRAPMASK)) / 4;
 		if (xfer > count)
 			xfer = count;
 		if (xfer > MAXDATAWORDS)
