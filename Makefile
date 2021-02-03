@@ -48,6 +48,8 @@ $(call agent, cc13xx,    0x20000400, M3)
 $(call agent, nrf528xx,  0x20000400, M3)
 $(call agent, pico, 0x20000400, M0)
 
+$(call program,picoboot,tools/picoboot.c)
+
 # tool to pack the agents into a source file
 SRCS := tools/mkbuiltins.c
 $(call program,mkbuiltins,$(SRCS))
