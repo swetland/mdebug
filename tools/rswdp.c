@@ -848,7 +848,7 @@ static int _swdp_reset(void) {
 	if (q_exec(&t)) {
 		xprintf(XSWD, "attach: IDCODE: ????????\n");
 	} else {
-		xprintf(XSWD, "attach: IDCODE: %08x\n");
+		xprintf(XSWD, "attach: IDCODE: %08x\n", idcode);
 	}
 
 	swd_error = 0;
