@@ -22,9 +22,8 @@ void *load_file(const char *fn, size_t *_sz) {
         sz = lseek(fd, 0, SEEK_END);
         if (sz < 0) goto fail;
         if (lseek(fd, 0, SEEK_SET)) goto fail;
-        if ((data = malloc(sz + BLOCK_MASK)) == NULL) goto fail;
+        if ((data = malloc(sz)) == NULL) goto fail;
         if (read(fd, data, sz) != sz) goto fail;
-	memset(data + sz, 0, BLOCK_MASK);
         *_sz = sz;
         return data;
 fail:
@@ -32,7 +31,6 @@ fail:
         if (fd >= 0) close(fd);
         return NULL;
 }
-
 
 #define PB_VID 0x2e8a
 #define PB_PID 0x0003
@@ -56,6 +54,14 @@ typedef struct {
 	};
 } pbcmd_t;
 
+typedef struct {
+	uint32_t token;
+	uint32_t status;
+	uint8_t cmd;
+	uint8_t busy;
+	uint8_t reserved[6];
+} pbstatus_t;
+
 #define CMD_EXCLUSIVE_ACCESS 0x01 // excl:u8
 #define CMD_REBOOT           0x02 // pc:u32 sp:u32 delay:u32
 #define CMD_FLASH_ERASE      0x03 // addr:u32 size:u32
@@ -73,15 +79,6 @@ typedef struct {
 static libusb_context* usbctx = NULL;
 static libusb_device_handle* usbdev = NULL;
 static uint32_t token = 0;
-
-
-typedef struct {
-	uint32_t token;
-	uint32_t status;
-	uint8_t cmd;
-	uint8_t busy;
-	uint8_t reserved[6];
-} pbstatus_t;
 
 int pb_status(void) {
 	pbstatus_t pbs;
@@ -148,6 +145,34 @@ void usage(void) {
 		);
 }
 
+int pb_io(uint8_t _cmd, uint32_t addr, uint32_t size, void* data) {
+	pbcmd_t cmd;
+	memset(&cmd, 0, sizeof(cmd));
+	cmd.cmdid = _cmd;
+	cmd.argslen = 8;
+	cmd.u32[0] = addr;
+	cmd.u32[1] = size;
+	if (data) cmd.xferlen = size;
+	return pb_txn(&cmd, data, 1);
+}
+
+int pb_cmd(uint8_t _cmd) {
+	pbcmd_t cmd;
+	memset(&cmd, 0, sizeof(cmd));
+	cmd.cmdid = _cmd;
+	switch (_cmd) {
+	case CMD_EXCLUSIVE_ACCESS:
+		cmd.argslen = 1;
+		cmd.u8[0] = EA_EXCLUSIVE;
+		break;
+	case CMD_REBOOT:
+		cmd.argslen = 12;
+		cmd.u32[2] = 100; // ms
+		break;
+	}
+	return pb_txn(&cmd, NULL, 0);
+}
+
 int main(int argc, char** argv) {
 	if (argc == 1) {
 		usage();
@@ -168,17 +193,10 @@ int main(int argc, char** argv) {
 
 	size_t sz;
 	void* data;
-	pbcmd_t cmd;
 	for (argc--, argv++; argc > 0; argc--, argv++) {
 		if (!strcmp(argv[0], "-reboot")) {
-			memset(&cmd, 0, sizeof(cmd));
-			cmd.cmdid = CMD_REBOOT;
-			cmd.argslen = 12;
-			cmd.u32[0] = 0; // pc
-			cmd.u32[1] = 0; // ignored
-			cmd.u32[2] = 100; // ms delay
-			if (pb_txn(&cmd, NULL, 0)) {
-				fprintf(stderr, "picoboot: EXIT XIP failed\n");
+			if (pb_cmd(CMD_REBOOT)) {
+				fprintf(stderr, "picoboot: REBOOT failed\n");
 				return -1;
 			}
 		} else if (!strcmp(argv[0], "-flash")) {
@@ -201,42 +219,21 @@ int main(int argc, char** argv) {
 				fprintf(stderr, "picoboot: bad flash start address 0x%08x\n", addr);
 				return -1;
 			}
-
-			memset(&cmd, 0, sizeof(cmd));
-			cmd.cmdid = CMD_EXCLUSIVE_ACCESS;
-			cmd.argslen = 1;
-			cmd.u8[0] = EA_EXCLUSIVE;
-			if (pb_txn(&cmd, NULL, 0)) {
+			if (pb_cmd(CMD_EXCLUSIVE_ACCESS)) {
 				fprintf(stderr, "picoboot: EXCLUSIVE ACCESS failed\n");
 				return -1;
 			}
-
-			memset(&cmd, 0, sizeof(cmd));
-			cmd.cmdid = CMD_EXIT_XIP;
-			if (pb_txn(&cmd, NULL, 0)) {
+			if (pb_cmd(CMD_EXIT_XIP)) {
 				fprintf(stderr, "picoboot: EXIT XIP failed\n");
 				return -1;
 			}
-
 			fprintf(stderr, "picoboot: erase flash @ 0x%08x\n", addr);
-			memset(&cmd, 0, sizeof(cmd));
-			cmd.cmdid = CMD_FLASH_ERASE;
-			cmd.argslen = 8;
-			cmd.u32[0] = addr;
-			cmd.u32[1] = (sz + ERASE_MASK) & (~ERASE_MASK);
-			if (pb_txn(&cmd, NULL, 0)) {
+			if (pb_io(CMD_FLASH_ERASE, addr, (sz + ERASE_MASK) & (~ERASE_MASK), NULL)) {
 				fprintf(stderr, "picoboot: ERASE failed\n");
 				return -1;
 			}
-
 			fprintf(stderr, "picoboot: write '%s' to flash @ 0x%08x\n", fn, addr);
-			memset(&cmd, 0, sizeof(cmd));
-			cmd.cmdid = CMD_WRITE;
-			cmd.argslen = 8;
-			cmd.u32[0] = addr;
-			cmd.u32[1] = sz; 
-			cmd.xferlen = sz;
-			if (pb_txn(&cmd, data, 1)) {
+			if (pb_io(CMD_WRITE, addr, sz, data)) {
 				fprintf(stderr, "picoboot: WRITE failed\n");
 				return -1;
 			}
