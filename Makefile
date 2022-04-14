@@ -46,6 +46,7 @@ $(call agent, lpc13xx,   0x10000400, M3)
 $(call agent, lpc15xx,   0x02000400, M3)
 $(call agent, cc13xx,    0x20000400, M3)
 $(call agent, nrf528xx,  0x20000400, M3)
+$(call agent, efr32bg2x,  0x20000400, M3)
 $(call agent, pico, 0x20000400, M0)
 
 $(call program,picoboot,tools/picoboot.c)

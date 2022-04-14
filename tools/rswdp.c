@@ -482,6 +482,7 @@ static void q_ap_read(struct txn *t, u32 addr, u32 *value) {
 }
 
 static void q_ahb_write(struct txn *t, u32 addr, u32 value) {
+//	xprintf(XSWD, "WR %08x -> %08x\n", value, addr);
 	if (t->cache_ahbtar != addr) {
 		q_ap_write(t, AHB_TAR, addr);
 		t->cache_ahbtar = addr;
@@ -846,9 +847,13 @@ static int _swdp_reset(void) {
 	t.tx[t.txc++] = SWD_RD(DP_IDCODE, 1);
 	t.rx[t.rxc++] = &idcode;
 	if (q_exec(&t)) {
-		xprintf(XSWD, "attach: IDCODE: ????????\n");
+		if (swd_verbose) {
+			xprintf(XSWD, "attach: IDCODE: ????????\n");
+		}
 	} else {
-		xprintf(XSWD, "attach: IDCODE: %08x\n", idcode);
+		if (swd_verbose) {
+			xprintf(XSWD, "attach: IDCODE: %08x\n", idcode);
+		}
 	}
 
 	swd_error = 0;
@@ -883,7 +888,9 @@ static int _swdp_reset(void) {
 	if (q_exec(&t))
 		return -1;
 
-	xprintf(XSWD, "attach: DPCTRL: %08x\n", n);
+	if (swd_verbose) {
+		xprintf(XSWD, "attach: DPCTRL: %08x\n", n);
+	}
 	//xprintf(XSWD, "attach: BASE: %08x\n", base);
 	return 0;
 }

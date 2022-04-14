@@ -387,15 +387,58 @@ int do_reset_hw(int argc, param *argv) {
 	return 0;
 }
 
+extern int swd_verbose;
+
+int wait_for_stop() {
+	u32 x;
+	unsigned m = 0;
+	unsigned xr = -1;
+	for (unsigned n = 0; n < 100; n++) {
+		if (swdp_ahb_read(DHCSR, &x) == 0) {
+			if (x & DHCSR_S_HALT) {
+				xprintf(XSWD,"CPU HALTED (%u,%u)\n", n,m);
+				unsigned y = -1, z = -1;
+				swdp_ahb_read(DFSR, &y);
+				swdp_ahb_read(DEMCR, &z);
+				xprintf(XSWD,"DHCSR %08x (%08x)\nDFSR  %08x\nDEMCR %08x\n", x, xr, y, z);
+				return 0;
+			}
+			if (x & DHCSR_S_RESET_ST) {
+				xr = x;
+				m++;
+				continue;
+			}
+			//xprintf(XSWD,"??? %08x\n", x);
+			swdp_ahb_write(DHCSR, DHCSR_DBGKEY | DHCSR_C_HALT | DHCSR_C_DEBUGEN);
+		} else {
+			swdp_reset();
+		}
+	}
+	xprintf(XSWD,"CPU DID NOT HALT\n");
+	return -1;
+}
+		
 int do_reset_stop(int argc, param *argv) {
 	swdp_core_halt();
+	wait_for_stop();
+
 	// enable vector-trap on reset, enable DWT/FPB
 	swdp_ahb_write(DEMCR, DEMCR_VC_CORERESET | DEMCR_TRCENA | vcflags);
+
+	swdp_ahb_write(0xe00ee08, 0x00010002);
 	// core reset and sys reset
-	swdp_ahb_write(0xe000ed0c, 0x05fa0005);
+	//swdp_ahb_write(0xe000ed0c, 0x05fa0005);
+	// sys reset
+	// TRM says requesting both at once is unpredictable...
+	swdp_ahb_write(0xe000ed0c, 0x05fa0004);
+
+	swd_verbose = 0;
+	wait_for_stop();
+	swd_verbose = 1;
+
 	//swdp_core_wait_for_halt();
-	do_stop(0,0);
-	swdp_ahb_write(DEMCR, DEMCR_TRCENA | vcflags);
+	//do_stop(0,0);
+	//swdp_ahb_write(DEMCR, DEMCR_TRCENA | vcflags);
 	return 0;
 }
 
